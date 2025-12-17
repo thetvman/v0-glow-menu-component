@@ -1,14 +1,11 @@
 "use client"
 
 import { useEffect } from "react"
-
 import { useState } from "react"
-
 import { useRef } from "react"
-
 import type React from "react"
 import Hls from "hls.js"
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward } from "lucide-react"
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
 import { WatchTogetherButton } from "./watch-together-button"
 import { WatchSessionManager, type WatchSession } from "@/lib/watch-session-supabase"
 
@@ -41,6 +38,7 @@ export function VideoPlayer({
   const isSyncingRef = useRef(false)
   const updateTimeoutRef = useRef<NodeJS.Timeout>()
   const waitingForGuestRef = useRef(false)
+  const sessionManagerRef = useRef<WatchSessionManager | null>(null)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -187,7 +185,19 @@ export function VideoPlayer({
 
     loadHLS()
 
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime)
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
+
+      if (activeSessionId && sessionManagerRef.current && !isSyncingRef.current) {
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current)
+        }
+        updateTimeoutRef.current = setTimeout(() => {
+          sessionManagerRef.current?.updatePlaybackState(activeSessionId, video.currentTime, !video.paused)
+        }, 1000)
+      }
+    }
+
     const handleDurationChange = () => setDuration(video.duration)
     const handleEnded = () => {
       setIsPlaying(false)
@@ -198,9 +208,19 @@ export function VideoPlayer({
     const handlePlay = () => {
       setIsPlaying(true)
       setError(null)
+
+      if (activeSessionId && sessionManagerRef.current && !isSyncingRef.current) {
+        console.log("[v0] Local play - updating session")
+        sessionManagerRef.current.updatePlaybackState(activeSessionId, video.currentTime, true)
+      }
     }
     const handlePause = () => {
       setIsPlaying(false)
+
+      if (activeSessionId && sessionManagerRef.current && !isSyncingRef.current) {
+        console.log("[v0] Local pause - updating session")
+        sessionManagerRef.current.updatePlaybackState(activeSessionId, video.currentTime, false)
+      }
     }
     const handleError = (e: Event) => {
       console.error("[v0] Video element error:", e)
@@ -222,6 +242,9 @@ export function VideoPlayer({
     video.addEventListener("error", handleError)
 
     return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current)
+      }
       video.removeEventListener("timeupdate", handleTimeUpdate)
       video.removeEventListener("durationchange", handleDurationChange)
       video.removeEventListener("ended", handleEnded)
@@ -243,6 +266,7 @@ export function VideoPlayer({
 
     console.log("[v0] Starting watch together sync for session:", activeSessionId)
     const manager = new WatchSessionManager()
+    sessionManagerRef.current = manager
 
     manager.getSession(activeSessionId).then((session) => {
       if (session) {
@@ -272,8 +296,10 @@ export function VideoPlayer({
       console.log(
         "[v0] Received session update - participants:",
         session.participants,
-        "waiting:",
-        waitingForGuestRef.current,
+        "isPlaying:",
+        session.isPlaying,
+        "playbackTime:",
+        session.playbackTime,
       )
 
       setParticipantCount(session.participants)
@@ -283,31 +309,33 @@ export function VideoPlayer({
         setWaitingForGuest(false)
       }
 
-      if (session.isPlaying !== isPlaying) {
-        isSyncingRef.current = true
+      isSyncingRef.current = true
+
+      if (session.isPlaying !== !video.paused) {
+        console.log("[v0] Syncing play/pause state:", session.isPlaying ? "playing" : "paused")
         if (session.isPlaying) {
           video.play().catch(console.error)
         } else {
           video.pause()
         }
-        setTimeout(() => {
-          isSyncingRef.current = false
-        }, 500)
       }
 
       const timeDiff = Math.abs((video.currentTime || 0) - session.playbackTime)
       if (timeDiff > 2) {
         console.log("[v0] Syncing time difference:", timeDiff)
-        isSyncingRef.current = true
         video.currentTime = session.playbackTime
-        setTimeout(() => {
-          isSyncingRef.current = false
-        }, 500)
       }
+
+      setTimeout(() => {
+        isSyncingRef.current = false
+      }, 500)
     })
 
     return () => {
-      manager.unsubscribe()
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.unsubscribe()
+        sessionManagerRef.current = null
+      }
     }
   }, [activeSessionId])
 
@@ -417,6 +445,20 @@ export function VideoPlayer({
     }, 3000)
   }
 
+  const handleRestartForAll = () => {
+    if (!activeSessionId || !sessionManagerRef.current) return
+
+    const video = videoRef.current
+    if (!video) return
+
+    console.log("[v0] Host restarting video for all participants")
+    video.currentTime = 0
+    video.pause()
+    setIsPlaying(false)
+
+    sessionManagerRef.current.updatePlaybackState(activeSessionId, 0, false)
+  }
+
   return (
     <div
       className="relative w-full h-full bg-black group"
@@ -442,14 +484,15 @@ export function VideoPlayer({
       )}
 
       {waitingForGuest && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/90 pointer-events-none">
-          <div className="text-center px-6">
-            <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-2xl font-bold text-white mb-2">Waiting for guests to join...</p>
-            <p className="text-white/70 mb-4">Video will start once someone joins your session</p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
-              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-              <span className="text-sm text-purple-300">Session Active</span>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="text-center space-y-4">
+            <div className="relative w-16 h-16 mx-auto">
+              <div className="absolute inset-0 border-4 border-primary/30 rounded-full" />
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+            <div>
+              <p className="text-lg font-medium text-white mb-2">Waiting for guests to join...</p>
+              <p className="text-sm text-muted-foreground">Share the session code to start watching together</p>
             </div>
           </div>
         </div>
@@ -570,6 +613,22 @@ export function VideoPlayer({
                 />
               </div>
             </div>
+
+            {activeSessionId && participantCount > 1 && (
+              <div className="absolute top-20 right-4 z-40 flex items-center gap-2">
+                <div className="bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-white flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  <span>{participantCount}</span>
+                </div>
+                <button
+                  onClick={handleRestartForAll}
+                  className="bg-black/60 backdrop-blur-sm p-2 rounded-full text-white hover:bg-black/80 transition-colors"
+                  title="Restart for everyone"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             <button
               onClick={toggleFullscreen}

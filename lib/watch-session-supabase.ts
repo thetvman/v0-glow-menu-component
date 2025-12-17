@@ -107,6 +107,7 @@ export class WatchSessionManager {
 
   async updatePlaybackState(sessionId: string, playbackTime: number, isPlaying: boolean): Promise<void> {
     try {
+      console.log("[v0] Updating session:", { sessionId, playbackTime, isPlaying })
       const response = await fetch("/api/watch-session", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -118,7 +119,10 @@ export class WatchSessionManager {
       })
 
       if (!response.ok) {
-        console.error("[v0] Failed to update session")
+        const error = await response.text()
+        console.error("[v0] Failed to update session:", error)
+      } else {
+        console.log("[v0] Session updated successfully")
       }
     } catch (error) {
       console.error("[v0] Error updating playback state:", error)
