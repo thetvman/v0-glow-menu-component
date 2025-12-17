@@ -129,6 +129,20 @@ export class WatchTogetherManager {
     }
   }
 
+  async restartSession(sessionId: string): Promise<void> {
+    try {
+      console.log("[v0] Restarting session for all participants:", sessionId)
+      await fetch("/api/watch-together", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, time: 0, playing: true }),
+      })
+      console.log("[v0] Restart command sent - all participants should seek to 0 and play")
+    } catch (error) {
+      console.error("[v0] Failed to restart session:", error)
+    }
+  }
+
   private mapSession(data: any): WatchSession {
     return {
       id: data.id,

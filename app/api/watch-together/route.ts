@@ -44,6 +44,8 @@ export async function PATCH(request: NextRequest) {
   try {
     const { sessionId, time, playing } = await request.json()
 
+    console.log("[v0] API: Updating session", sessionId, "to time:", time, "playing:", playing)
+
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -57,6 +59,7 @@ export async function PATCH(request: NextRequest) {
 
     if (error) throw error
 
+    console.log("[v0] API: Session updated successfully, Supabase will broadcast to all subscribers")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[v0] Update session error:", error)

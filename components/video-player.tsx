@@ -253,13 +253,20 @@ export function VideoPlayer({
     video.currentTime = Math.max(0, Math.min(duration, currentTime + seconds))
   }
 
-  const restart = () => {
+  const restart = async () => {
     const video = videoRef.current
     if (!video || !activeSessionId || !managerRef.current) return
 
+    console.log("[v0] Restarting video for all participants")
+
+    // Reset video locally
     video.currentTime = 0
-    video.pause()
-    managerRef.current.updatePlayback(activeSessionId, 0, false)
+
+    // Update session to restart and play for everyone
+    await managerRef.current.restartSession(activeSessionId)
+
+    // Start playing locally
+    video.play()
   }
 
   const formatTime = (time: number) => {
