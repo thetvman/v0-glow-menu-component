@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Users, ArrowRight, Loader2, AlertCircle } from "lucide-react"
-import { WatchSessionManager } from "@/lib/watch-session-supabase"
+import { WatchTogetherManager } from "@/lib/watch-together"
 
 function ScreenshareContent() {
   const router = useRouter()
@@ -40,7 +40,7 @@ function ScreenshareContent() {
     console.log("[v0] Joining session with code:", sessionCode)
 
     try {
-      const manager = new WatchSessionManager()
+      const manager = new WatchTogetherManager()
       const session = await manager.joinSession(sessionCode)
 
       if (!session) {

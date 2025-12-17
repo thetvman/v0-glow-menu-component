@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { VideoPlayer } from "@/components/video-player"
-import { WatchSessionManager, type WatchSession } from "@/lib/watch-session-supabase"
+import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
 import { ArrowLeft, Users } from "lucide-react"
 import Link from "next/link"
 
@@ -19,7 +19,7 @@ export default function WatchGuestPage() {
       try {
         setLoading(true)
         const sessionId = params.sessionId as string
-        const manager = new WatchSessionManager()
+        const manager = new WatchTogetherManager()
         const foundSession = await manager.getSession(sessionId)
 
         if (!foundSession) {
@@ -80,28 +80,29 @@ export default function WatchGuestPage() {
           border border-purple-500/30 rounded-lg backdrop-blur-sm"
         >
           <Users className="w-4 h-4 text-purple-400" />
-          <span className="text-sm text-white/90">{session.participants.length} watching</span>
+          <span className="text-sm text-white/90">{session.participants} watching</span>
         </div>
       </div>
 
       <div className="w-full h-screen">
         <VideoPlayer
           src={session.streamUrl}
-          title={session.title}
+          title={session.videoTitle}
           subtitle="Watching Together"
           autoPlay
-          sessionId={session.id}
+          activeSessionId={session.id}
           videoType={session.videoType}
+          videoIdentifier={session.videoId}
         />
       </div>
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl">
-          <h1 className="text-3xl font-bold mb-4">{session.title}</h1>
+          <h1 className="text-3xl font-bold mb-4">{session.videoTitle}</h1>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              <span>{session.participants.length} viewers</span>
+              <span>{session.participants} viewers</span>
             </div>
             <span>Session Code: {session.code}</span>
             <span>Type: {session.videoType}</span>
