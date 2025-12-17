@@ -102,7 +102,7 @@ export class WatchTogetherManager {
       this.channel.unsubscribe()
     }
 
-    console.log("[v0] Setting up realtime subscription for session:", sessionId)
+    console.log("[v0] 🔌 Setting up realtime subscription for session:", sessionId)
 
     this.channel = this.supabase
       .channel(`session:${sessionId}`)
@@ -115,10 +115,10 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log("[v0] ⚡ Realtime update received!", payload)
+          console.log("[v0] ⚡ UPDATE event received from Supabase!", payload)
           if (payload.new) {
             const session = this.mapSession(payload.new)
-            console.log("[v0] Syncing to:", {
+            console.log("[v0] 🔄 Syncing playback state:", {
               time: session.playbackTime,
               playing: session.isPlaying,
               participants: session.participants,
@@ -127,13 +127,29 @@ export class WatchTogetherManager {
           }
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "watch_sessions",
+          filter: `id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log("[v0] ⚡ INSERT event received (new participant)!", payload)
+        },
+      )
       .subscribe((status, err) => {
-        console.log("[v0] Subscription status:", status)
         if (err) {
-          console.error("[v0] Subscription error:", err)
+          console.error("[v0] ❌ Subscription error:", err)
         }
+        console.log("[v0] 📡 Subscription status:", status)
         if (status === "SUBSCRIBED") {
-          console.log("[v0] ✅ Successfully subscribed to realtime updates")
+          console.log("[v0] ✅ Successfully subscribed to realtime updates for session:", sessionId)
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] ❌ Channel error - realtime may not be enabled on watch_sessions table")
+        } else if (status === "TIMED_OUT") {
+          console.error("[v0] ⏱️ Subscription timed out - check network connection")
         }
       })
   }
