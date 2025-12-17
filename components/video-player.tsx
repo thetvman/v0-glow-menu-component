@@ -248,14 +248,20 @@ export function VideoPlayer({
     sessionManagerRef.current = manager
 
     manager.getSession(activeSessionId).then((session) => {
-      if (session && session.participants === 1) {
-        console.log("[v0] Host waiting for guests to join...")
-        setWaitingForGuest(true)
-        setParticipantCount(1)
-        const video = videoRef.current
-        if (video && !video.paused) {
-          video.pause()
-          setIsPlaying(false)
+      if (session) {
+        console.log("[v0] Initial session state - participants:", session.participants)
+        setParticipantCount(session.participants)
+        if (session.participants === 1) {
+          console.log("[v0] Host waiting for guests to join...")
+          setWaitingForGuest(true)
+          const video = videoRef.current
+          if (video && !video.paused) {
+            video.pause()
+            setIsPlaying(false)
+          }
+        } else {
+          console.log("[v0] Joining session with existing participants")
+          setWaitingForGuest(false)
         }
       }
     })
@@ -268,9 +274,11 @@ export function VideoPlayer({
 
       console.log("[v0] Received session update:", session)
 
+      const prevCount = participantCount
       setParticipantCount(session.participants)
+
       if (session.participants > 1 && waitingForGuest) {
-        console.log("[v0] Guest joined! Enabling playback...")
+        console.log("[v0] Guest joined! (count changed from", prevCount, "to", session.participants, ")")
         setWaitingForGuest(false)
       }
 
@@ -307,7 +315,7 @@ export function VideoPlayer({
       manager.unsubscribe()
       sessionManagerRef.current = null
     }
-  }, [activeSessionId, isPlaying, waitingForGuest])
+  }, [activeSessionId, isPlaying])
 
   const togglePlay = () => {
     const video = videoRef.current
