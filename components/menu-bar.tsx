@@ -6,6 +6,7 @@ import { Home, Film, Tv, Radio, Search } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useXtream } from "@/lib/xtream-context"
 
 interface MenuItem {
   icon: React.ReactNode
@@ -96,8 +97,17 @@ const sharedTransition = {
 export function MenuBar() {
   const { theme } = useTheme()
   const pathname = usePathname()
+  const { availableContent } = useXtream()
 
   const isDarkTheme = theme === "dark"
+
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.href === "/" || item.href === "/search") return true
+    if (item.href === "/movies") return availableContent.hasMovies
+    if (item.href === "/series") return availableContent.hasSeries
+    if (item.href === "/live") return availableContent.hasLiveTV
+    return true
+  })
 
   return (
     <motion.nav
@@ -114,7 +124,7 @@ export function MenuBar() {
         variants={navGlowVariants}
       />
       <ul className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 sm:gap-2 relative z-10">
-        {menuItems.map((item, index) => {
+        {visibleMenuItems.map((item, index) => {
           const isActive = pathname === item.href
 
           return (

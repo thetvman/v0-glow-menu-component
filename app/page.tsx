@@ -16,7 +16,7 @@ import type { VODStream, Series } from "@/types/xtream"
 
 export default function Page() {
   const router = useRouter()
-  const { isConnected, disconnect, credentials, api } = useXtream()
+  const { isConnected, disconnect, credentials, api, availableContent } = useXtream()
   const [loading, setLoading] = useState(false)
   const [featuredMovies, setFeaturedMovies] = useState<VODStream[]>([])
   const [featuredSeries, setFeaturedSeries] = useState<Series[]>([])
@@ -37,29 +37,51 @@ export default function Page() {
 
     try {
       setLoading(true)
-      const [movies, series, live] = await Promise.all([
-        api
-          .getVodStreams()
-          .then((data) => data.slice(0, 20))
-          .catch((err) => {
-            console.error("Error loading movies:", err)
-            return []
-          }),
-        api
-          .getSeries()
-          .then((data) => data.slice(0, 20))
-          .catch((err) => {
-            console.error("Error loading series:", err)
-            return []
-          }),
-        api
-          .getLiveStreams()
-          .then((data) => data.slice(0, 20))
-          .catch((err) => {
-            console.error("Error loading live streams:", err)
-            return []
-          }),
-      ])
+      const promises = []
+
+      if (availableContent.hasMovies) {
+        promises.push(
+          api
+            .getVodStreams()
+            .then((data) => data.slice(0, 20))
+            .catch((err) => {
+              console.error("Error loading movies:", err)
+              return []
+            }),
+        )
+      } else {
+        promises.push(Promise.resolve([]))
+      }
+
+      if (availableContent.hasSeries) {
+        promises.push(
+          api
+            .getSeries()
+            .then((data) => data.slice(0, 20))
+            .catch((err) => {
+              console.error("Error loading series:", err)
+              return []
+            }),
+        )
+      } else {
+        promises.push(Promise.resolve([]))
+      }
+
+      if (availableContent.hasLiveTV) {
+        promises.push(
+          api
+            .getLiveStreams()
+            .then((data) => data.slice(0, 20))
+            .catch((err) => {
+              console.error("Error loading live streams:", err)
+              return []
+            }),
+        )
+      } else {
+        promises.push(Promise.resolve([]))
+      }
+
+      const [movies, series, live] = await Promise.all(promises)
 
       setFeaturedMovies(movies)
       setFeaturedSeries(series)
@@ -114,7 +136,7 @@ export default function Page() {
           <MenuBar />
         </div>
 
-        {loading ? (
+        {loading || availableContent.isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
@@ -123,8 +145,7 @@ export default function Page() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Trending Movies */}
-            {featuredMovies.length > 0 && (
+            {availableContent.hasMovies && featuredMovies.length > 0 && (
               <ContentCarousel title="Trending Movies" itemCount={featuredMovies.length}>
                 {featuredMovies.map((movie) => (
                   <div key={movie.stream_id} className="min-w-[160px]">
@@ -134,8 +155,7 @@ export default function Page() {
               </ContentCarousel>
             )}
 
-            {/* Popular Series */}
-            {featuredSeries.length > 0 && (
+            {availableContent.hasSeries && featuredSeries.length > 0 && (
               <ContentCarousel title="Popular Series" itemCount={featuredSeries.length}>
                 {featuredSeries.map((series) => (
                   <div key={series.series_id} className="min-w-[160px]">
@@ -145,8 +165,7 @@ export default function Page() {
               </ContentCarousel>
             )}
 
-            {/* Live Channels */}
-            {liveChannels.length > 0 && (
+            {availableContent.hasLiveTV && liveChannels.length > 0 && (
               <ContentCarousel title="Live Channels" itemCount={liveChannels.length}>
                 {liveChannels.map((channel) => (
                   <LiveChannelCard
@@ -158,32 +177,37 @@ export default function Page() {
               </ContentCarousel>
             )}
 
-            {/* Quick links */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
-              <Link href="/movies">
-                <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
-                  <div className="flex flex-col items-center gap-2">
-                    <TrendingUp className="w-6 h-6" />
-                    <span>Browse All Movies</span>
-                  </div>
-                </Button>
-              </Link>
-              <Link href="/series">
-                <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
-                  <div className="flex flex-col items-center gap-2">
-                    <TrendingUp className="w-6 h-6" />
-                    <span>Browse All Series</span>
-                  </div>
-                </Button>
-              </Link>
-              <Link href="/live">
-                <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
-                  <div className="flex flex-col items-center gap-2">
-                    <TrendingUp className="w-6 h-6" />
-                    <span>Browse Live TV</span>
-                  </div>
-                </Button>
-              </Link>
+              {availableContent.hasMovies && (
+                <Link href="/movies">
+                  <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
+                    <div className="flex flex-col items-center gap-2">
+                      <TrendingUp className="w-6 h-6" />
+                      <span>Browse All Movies</span>
+                    </div>
+                  </Button>
+                </Link>
+              )}
+              {availableContent.hasSeries && (
+                <Link href="/series">
+                  <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
+                    <div className="flex flex-col items-center gap-2">
+                      <TrendingUp className="w-6 h-6" />
+                      <span>Browse All Series</span>
+                    </div>
+                  </Button>
+                </Link>
+              )}
+              {availableContent.hasLiveTV && (
+                <Link href="/live">
+                  <Button variant="outline" size="lg" className="w-full h-24 text-lg bg-transparent">
+                    <div className="flex flex-col items-center gap-2">
+                      <TrendingUp className="w-6 h-6" />
+                      <span>Browse Live TV</span>
+                    </div>
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { MenuBar } from "@/components/menu-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -9,6 +9,7 @@ import { useXtream } from "@/lib/xtream-context"
 import { Button } from "@/components/ui/button"
 import { Loader2, ChevronRight, Radio } from "lucide-react"
 import Link from "next/link"
+import { getDeviceMemory } from "@/lib/performance-utils"
 
 interface LiveCategory {
   category_id: string
@@ -34,17 +35,30 @@ interface LiveStream {
 
 export default function LivePage() {
   const router = useRouter()
-  const { isConnected, api } = useXtream()
+  const { isConnected, api, availableContent } = useXtream()
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<LiveCategory[]>([])
   const [streamsByCategory, setStreamsByCategory] = useState<Record<string, LiveStream[]>>({})
   const [displayedCountByCategory, setDisplayedCountByCategory] = useState<Record<string, number>>({})
+
+  const initialLoadCount = useMemo(() => {
+    const memory = getDeviceMemory()
+    if (memory <= 2) return 10
+    if (memory <= 4) return 15
+    return 20
+  }, [])
 
   useEffect(() => {
     if (isConnected && api) {
       loadData()
     }
   }, [isConnected, api])
+
+  useEffect(() => {
+    if (!availableContent.isLoading && isConnected && !availableContent.hasLiveTV) {
+      router.push("/")
+    }
+  }, [availableContent, isConnected, router])
 
   async function loadData() {
     if (!api) return
@@ -71,7 +85,7 @@ export default function LivePage() {
 
       const initialCounts: Record<string, number> = {}
       categoriesData.forEach((cat) => {
-        initialCounts[cat.category_id] = 20
+        initialCounts[cat.category_id] = initialLoadCount
       })
       setDisplayedCountByCategory(initialCounts)
     } catch (err) {
@@ -84,7 +98,7 @@ export default function LivePage() {
   const loadMoreForCategory = (categoryId: string) => {
     setDisplayedCountByCategory((prev) => ({
       ...prev,
-      [categoryId]: (prev[categoryId] || 20) + 20,
+      [categoryId]: (prev[categoryId] || initialLoadCount) + 15,
     }))
   }
 
@@ -106,6 +120,28 @@ export default function LivePage() {
             <Link href="/login">
               <Button variant="default" className="gap-2">
                 Go to Login
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!availableContent.isLoading && !availableContent.hasLiveTV) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="absolute top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <Radio className="w-20 h-20 mx-auto mb-4 text-muted-foreground/30" />
+            <h3 className="text-xl font-semibold mb-2">Live TV Not Available</h3>
+            <p className="text-muted-foreground mb-4">Your playlist does not include live TV channels</p>
+            <Link href="/">
+              <Button variant="default" className="gap-2">
+                Go to Home
               </Button>
             </Link>
           </div>
@@ -138,7 +174,7 @@ export default function LivePage() {
           <div className="space-y-12">
             {categories.map((category) => {
               const streams = streamsByCategory[category.category_id] || []
-              const displayCount = displayedCountByCategory[category.category_id] || 20
+              const displayCount = displayedCountByCategory[category.category_id] || initialLoadCount
               const visibleStreams = streams.slice(0, displayCount)
               const hasMore = displayCount < streams.length
 
@@ -148,7 +184,7 @@ export default function LivePage() {
                 <div key={category.category_id} className="space-y-4">
                   <h2 className="text-2xl font-semibold">{category.category_name}</h2>
                   <div className="relative">
-                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide will-change-transform">
                       {visibleStreams.map((stream) => (
                         <LiveChannelCard
                           key={stream.stream_id}
@@ -157,15 +193,15 @@ export default function LivePage() {
                         />
                       ))}
                       {hasMore && (
-                        <div className="min-w-[160px] flex items-center justify-center">
+                        <div className="min-w-[140px] flex items-center justify-center">
                           <Button
                             variant="outline"
                             size="lg"
                             onClick={() => loadMoreForCategory(category.category_id)}
-                            className="h-[240px] w-full flex flex-col gap-2"
+                            className="h-full w-full flex flex-col gap-2"
                           >
-                            <ChevronRight className="w-8 h-8" />
-                            <span className="text-sm">
+                            <ChevronRight className="w-6 h-6" />
+                            <span className="text-xs">
                               Load More
                               <br />({displayCount} of {streams.length})
                             </span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
 import type { SeriesCategory, Series } from "@/types/xtream"
 import { MenuBar } from "@/components/menu-bar"
@@ -15,7 +16,8 @@ import { Button } from "@/components/ui/button"
 import { getOptimalItemsPerPage } from "@/lib/performance-utils"
 
 export default function SeriesPage() {
-  const { api, isConnected } = useXtream()
+  const router = useRouter()
+  const { api, isConnected, availableContent } = useXtream()
   const [categories, setCategories] = useState<SeriesCategory[]>([])
   const [seriesByCategory, setSeriesByCategory] = useState<Map<string, Series[]>>(new Map())
   const [categoryPages, setCategoryPages] = useState<Map<string, number>>(new Map())
@@ -34,6 +36,12 @@ export default function SeriesPage() {
       setLoading(false)
     }
   }, [isConnected, api])
+
+  useEffect(() => {
+    if (!availableContent.isLoading && isConnected && !availableContent.hasSeries) {
+      router.push("/")
+    }
+  }, [availableContent, isConnected, router])
 
   async function loadData() {
     if (!api) return
@@ -109,7 +117,29 @@ export default function SeriesPage() {
     )
   }
 
-  if (loading) {
+  if (!availableContent.isLoading && !availableContent.hasSeries) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+        <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <Tv className="w-20 h-20 mx-auto mb-4 text-muted-foreground/30" />
+            <h3 className="text-xl font-semibold mb-2">Series Not Available</h3>
+            <p className="text-muted-foreground mb-4">Your playlist does not include series</p>
+            <Link href="/">
+              <Button variant="default" className="gap-2">
+                Go to Home
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading || availableContent.isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="fixed top-4 right-4 z-50">

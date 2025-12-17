@@ -37,3 +37,8 @@ export function debounce<T extends (...args: any[]) => any>(func: T, wait: numbe
     timeout = setTimeout(later, wait)
   }
 }
+
+export function getDeviceMemory(): number {
+  const { deviceMemory } = detectDeviceCapabilities()
+  return deviceMemory
+}
