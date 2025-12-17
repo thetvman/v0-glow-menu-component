@@ -1,9 +1,14 @@
 "use client"
 
-import type React from "react"
+import { useEffect } from "react"
 
-import { useEffect, useRef, useState } from "react"
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipForward, SkipBack } from "lucide-react"
+import { useState } from "react"
+
+import { useRef } from "react"
+
+import type React from "react"
+import Hls from "hls.js"
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward } from "lucide-react"
 import { WatchTogetherButton } from "./watch-together-button"
 import { WatchSessionManager, type WatchSession } from "@/lib/watch-session-supabase"
 
@@ -11,48 +16,43 @@ interface VideoPlayerProps {
   src: string
   title: string
   subtitle?: string
-  onEnded?: () => void
-  onNext?: () => void
-  onPrevious?: () => void
-  hasNext?: boolean
-  hasPrevious?: boolean
-  autoPlay?: boolean
-  sessionId?: string
+  onBack?: () => void
   videoType?: "movie" | "series" | "live"
   videoIdentifier?: string
   streamUrl?: string // Added streamUrl prop for guest access
+  activeSessionId?: string
+  onSessionStart?: (id: string) => void
 }
 
 export function VideoPlayer({
   src,
   title,
   subtitle,
-  onEnded,
-  onNext,
-  onPrevious,
-  hasNext,
-  hasPrevious,
-  autoPlay = false,
-  sessionId,
+  onBack,
   videoType,
   videoIdentifier,
   streamUrl,
+  activeSessionId,
+  onSessionStart,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const hlsRef = useRef<Hls | null>(null)
+  const isSyncingRef = useRef(false)
+  const updateTimeoutRef = useRef<NodeJS.Timeout>()
+  const waitingForGuestRef = useRef(false)
+
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(true)
-  const [isBuffering, setIsBuffering] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isHlsReady, setIsHlsReady] = useState(false)
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>()
-  const hlsRef = useRef<any>(null)
-  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId)
-  const sessionManagerRef = useRef<WatchSessionManager | null>(null)
-  const isSyncingRef = useRef(false)
   const [waitingForGuest, setWaitingForGuest] = useState(false)
   const [participantCount, setParticipantCount] = useState(1)
 
@@ -69,8 +69,6 @@ export function VideoPlayer({
 
       if (src.includes(".m3u8")) {
         try {
-          const Hls = (await import("hls.js")).default
-
           if (Hls.isSupported()) {
             console.log("[v0] Using HLS.js for stream playback")
 
@@ -99,21 +97,22 @@ export function VideoPlayer({
               setIsBuffering(false)
               setIsHlsReady(true)
 
-              if (autoPlay) {
-                setTimeout(() => {
-                  video
-                    .play()
-                    .then(() => {
-                      console.log("[v0] Playback started")
-                      setIsPlaying(true)
-                      setError(null)
-                    })
-                    .catch((err) => {
-                      console.error("[v0] Autoplay failed:", err)
-                      setError("Autoplay was prevented. Click play to start.")
-                      setIsPlaying(false)
-                    })
-                }, 100)
+              if (activeSessionId) {
+                console.log("[v0] Session ID provided, starting sync")
+                onSessionStart?.(activeSessionId)
+              } else if (video.paused) {
+                video
+                  .play()
+                  .then(() => {
+                    console.log("[v0] Playback started")
+                    setIsPlaying(true)
+                    setError(null)
+                  })
+                  .catch((err) => {
+                    console.error("[v0] Autoplay failed:", err)
+                    setError("Autoplay was prevented. Click play to start.")
+                    setIsPlaying(false)
+                  })
               }
             })
 
@@ -144,7 +143,7 @@ export function VideoPlayer({
             video.src = src
             setIsBuffering(false)
             setIsHlsReady(true)
-            if (autoPlay) {
+            if (video.paused) {
               video
                 .play()
                 .then(() => {
@@ -170,7 +169,7 @@ export function VideoPlayer({
         video.src = src
         setIsBuffering(false)
         setIsHlsReady(true)
-        if (autoPlay) {
+        if (video.paused) {
           video
             .play()
             .then(() => {
@@ -192,7 +191,7 @@ export function VideoPlayer({
     const handleDurationChange = () => setDuration(video.duration)
     const handleEnded = () => {
       setIsPlaying(false)
-      onEnded?.()
+      video.currentTime = 0
     }
     const handleWaiting = () => setIsBuffering(true)
     const handleCanPlay = () => setIsBuffering(false)
@@ -237,15 +236,13 @@ export function VideoPlayer({
         hlsRef.current = null
       }
     }
-  }, [src, autoPlay, onEnded])
+  }, [src, activeSessionId, onSessionStart])
 
   useEffect(() => {
     if (!activeSessionId) return
 
     console.log("[v0] Starting watch together sync for session:", activeSessionId)
-
     const manager = new WatchSessionManager()
-    sessionManagerRef.current = manager
 
     manager.getSession(activeSessionId).then((session) => {
       if (session) {
@@ -272,13 +269,17 @@ export function VideoPlayer({
       const video = videoRef.current
       if (!video) return
 
-      console.log("[v0] Received session update:", session)
+      console.log(
+        "[v0] Received session update - participants:",
+        session.participants,
+        "waiting:",
+        waitingForGuestRef.current,
+      )
 
-      const prevCount = participantCount
       setParticipantCount(session.participants)
 
-      if (session.participants > 1 && waitingForGuest) {
-        console.log("[v0] Guest joined! (count changed from", prevCount, "to", session.participants, ")")
+      if (session.participants > 1 && waitingForGuestRef.current) {
+        console.log("[v0] Guest joined! Removing waiting overlay")
         setWaitingForGuest(false)
       }
 
@@ -305,17 +306,14 @@ export function VideoPlayer({
       }
     })
 
-    const syncInterval = setInterval(() => {
-      if (isSyncingRef.current) return
-      manager.updatePlaybackState(activeSessionId, videoRef.current?.currentTime || 0, isPlaying)
-    }, 2000)
-
     return () => {
-      clearInterval(syncInterval)
       manager.unsubscribe()
-      sessionManagerRef.current = null
     }
-  }, [activeSessionId, isPlaying])
+  }, [activeSessionId])
+
+  useEffect(() => {
+    waitingForGuestRef.current = waitingForGuest
+  }, [waitingForGuest])
 
   const togglePlay = () => {
     const video = videoRef.current
@@ -382,8 +380,10 @@ export function VideoPlayer({
 
     if (!document.fullscreenElement) {
       video.requestFullscreen().catch(console.error)
+      setIsFullscreen(true)
     } else {
       document.exitFullscreen().catch(console.error)
+      setIsFullscreen(false)
     }
   }
 
@@ -407,10 +407,10 @@ export function VideoPlayer({
 
   const handleMouseMove = () => {
     setShowControls(true)
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current)
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current)
     }
-    controlsTimeoutRef.current = setTimeout(() => {
+    updateTimeoutRef.current = setTimeout(() => {
       if (isPlaying) {
         setShowControls(false)
       }
@@ -447,7 +447,7 @@ export function VideoPlayer({
             <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
             <p className="text-2xl font-bold text-white mb-2">Waiting for guests to join...</p>
             <p className="text-white/70 mb-4">Video will start once someone joins your session</p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
               <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
               <span className="text-sm text-purple-300">Session Active</span>
             </div>
@@ -478,7 +478,7 @@ export function VideoPlayer({
                 videoTitle={title}
                 videoType={videoType}
                 streamUrl={streamUrl}
-                onSessionCreated={(id) => setActiveSessionId(id)}
+                onSessionCreated={(id) => onSessionStart?.(id)}
               />
             )}
             {activeSessionId && (
@@ -542,23 +542,13 @@ export function VideoPlayer({
                 <SkipForward className="w-5 h-5 text-white" />
               </button>
 
-              {hasPrevious && (
+              {onBack && (
                 <button
-                  onClick={onPrevious}
+                  onClick={onBack}
                   className="px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white text-sm
                     hover:bg-white/20 transition-all"
                 >
-                  Previous Episode
-                </button>
-              )}
-
-              {hasNext && (
-                <button
-                  onClick={onNext}
-                  className="px-4 py-2 rounded-full bg-primary/20 backdrop-blur-sm text-white text-sm
-                    hover:bg-primary/30 transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]"
-                >
-                  Next Episode
+                  Back
                 </button>
               )}
 
