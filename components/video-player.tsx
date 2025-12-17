@@ -65,8 +65,13 @@ export function VideoPlayer({
 
             const hls = new Hls({
               enableWorker: true,
-              lowLatencyMode: true,
-              backBufferLength: 90,
+              lowLatencyMode: false,
+              backBufferLength: 30, // Reduced from 90 to save memory
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+              maxBufferSize: 60 * 1000 * 1000, // 60MB max buffer
+              maxBufferHole: 0.5,
+              highBufferWatchdogPeriod: 2,
             })
 
             hlsRef.current = hls

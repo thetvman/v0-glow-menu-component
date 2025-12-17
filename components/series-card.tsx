@@ -12,6 +12,7 @@ interface SeriesCardProps {
 
 export function SeriesCard({ series, onClick }: SeriesCardProps) {
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
 
   return (
     <Card
@@ -21,12 +22,20 @@ export function SeriesCard({ series, onClick }: SeriesCardProps) {
       <CardContent className="p-0">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted/50 rounded-lg">
           {series.cover && !imageError ? (
-            <img
-              src={series.cover || "/placeholder.svg"}
-              alt={series.name}
-              className="w-full h-full object-cover"
-              onError={() => setImageError(true)}
-            />
+            <>
+              {!imageLoaded && <div className="absolute inset-0 bg-muted animate-pulse" />}
+              <img
+                src={series.cover || "/placeholder.svg"}
+                alt={series.name}
+                loading="lazy"
+                decoding="async"
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                  imageLoaded ? "opacity-100" : "opacity-0"
+                }`}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-muted">
               <Play className="w-12 h-12 text-muted-foreground/30" />

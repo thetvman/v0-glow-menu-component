@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
@@ -12,6 +12,7 @@ import { MovieCard } from "@/components/movie-card"
 import { Loader2, Film, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { getOptimalItemsPerPage } from "@/lib/performance-utils"
 
 const ITEMS_PER_PAGE = 20
 
@@ -24,6 +25,8 @@ export default function MoviesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [allMovies, setAllMovies] = useState<VODStream[]>([])
+
+  const adaptiveITEMS_PER_PAGE = useMemo(() => getOptimalItemsPerPage(), [])
 
   useEffect(() => {
     if (isConnected && api) {
@@ -50,7 +53,7 @@ export default function MoviesPage() {
 
       categoriesData.forEach((category) => {
         const categoryMovies = moviesData.filter((m) => m.category_id === category.category_id)
-        movieMap.set(category.category_id, categoryMovies.slice(0, ITEMS_PER_PAGE))
+        movieMap.set(category.category_id, categoryMovies.slice(0, adaptiveITEMS_PER_PAGE))
         pageMap.set(category.category_id, 1)
       })
 
@@ -70,8 +73,8 @@ export default function MoviesPage() {
     const categoryMovies = allMovies.filter((m) => m.category_id === categoryId)
     const currentMovies = moviesByCategory.get(categoryId) || []
 
-    const startIdx = currentPage * ITEMS_PER_PAGE
-    const endIdx = nextPage * ITEMS_PER_PAGE
+    const startIdx = currentPage * adaptiveITEMS_PER_PAGE
+    const endIdx = nextPage * adaptiveITEMS_PER_PAGE
     const newMovies = categoryMovies.slice(startIdx, endIdx)
 
     if (newMovies.length > 0) {

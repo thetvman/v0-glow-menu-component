@@ -12,6 +12,7 @@ interface MovieCardProps {
 
 export function MovieCard({ movie, onClick }: MovieCardProps) {
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
 
   return (
     <Card
@@ -21,12 +22,20 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
       <CardContent className="p-0">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted/50 rounded-lg">
           {movie.stream_icon && !imageError ? (
-            <img
-              src={movie.stream_icon || "/placeholder.svg"}
-              alt={movie.name}
-              className="w-full h-full object-cover"
-              onError={() => setImageError(true)}
-            />
+            <>
+              {!imageLoaded && <div className="absolute inset-0 bg-muted animate-pulse" />}
+              <img
+                src={movie.stream_icon || "/placeholder.svg"}
+                alt={movie.name}
+                loading="lazy"
+                decoding="async"
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                  imageLoaded ? "opacity-100" : "opacity-0"
+                }`}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-muted">
               <Play className="w-12 h-12 text-muted-foreground/30" />

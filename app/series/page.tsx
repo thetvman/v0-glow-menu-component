@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
 import { useXtream } from "@/lib/xtream-context"
 import type { SeriesCategory, Series } from "@/types/xtream"
@@ -12,8 +12,7 @@ import { SeriesEpisodeSelector } from "@/components/series-episode-selector"
 import { Loader2, Tv, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-
-const ITEMS_PER_PAGE = 20
+import { getOptimalItemsPerPage } from "@/lib/performance-utils"
 
 export default function SeriesPage() {
   const { api, isConnected } = useXtream()
@@ -25,6 +24,8 @@ export default function SeriesPage() {
   const [allSeries, setAllSeries] = useState<Series[]>([])
   const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null)
   const [showEpisodeSelector, setShowEpisodeSelector] = useState(false)
+
+  const ITEMS_PER_PAGE = useMemo(() => getOptimalItemsPerPage(), [])
 
   useEffect(() => {
     if (isConnected && api) {
