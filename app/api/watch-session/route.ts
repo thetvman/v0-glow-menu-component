@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
 
 // Generate random 6-digit code
 function generateSessionCode(): string {
@@ -15,13 +15,13 @@ function generateSessionCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { videoType, videoId, streamUrl, title } = body
+    const { videoType, videoId, streamUrl, title, hostName } = body
 
     if (!videoType || !videoId || !streamUrl) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const code = generateSessionCode()
     const sessionId = `session_${Date.now()}`
 
@@ -30,11 +30,12 @@ export async function POST(request: NextRequest) {
       .insert({
         id: sessionId,
         code,
+        host_name: hostName || "Anonymous",
         video_type: videoType,
-        video_id: videoId,
+        video_identifier: videoId,
+        video_title: title || "Untitled",
         stream_url: streamUrl,
-        title: title || "Untitled",
-        current_time: 0,
+        playback_time: 0,
         is_playing: false,
         participants: 1,
       })
@@ -57,20 +58,20 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sessionId, currentTime, isPlaying } = body
+    const { sessionId, playbackTime, isPlaying } = body
 
     if (!sessionId) {
       return NextResponse.json({ error: "Session ID required" }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const updateData: any = {
       updated_at: new Date().toISOString(),
     }
 
-    if (typeof currentTime === "number") {
-      updateData.current_time = currentTime
+    if (typeof playbackTime === "number") {
+      updateData.playback_time = playbackTime
     }
     if (typeof isPlaying === "boolean") {
       updateData.is_playing = isPlaying

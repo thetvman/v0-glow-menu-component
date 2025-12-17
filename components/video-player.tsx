@@ -268,11 +268,11 @@ export function VideoPlayer({
       }
 
       // Sync time if difference is > 2 seconds
-      const timeDiff = Math.abs((video.currentTime || 0) - session.currentTime)
+      const timeDiff = Math.abs((video.currentTime || 0) - session.playbackTime)
       if (timeDiff > 2) {
         console.log("[v0] Syncing time difference:", timeDiff)
         isSyncingRef.current = true
-        video.currentTime = session.currentTime
+        video.currentTime = session.playbackTime
         setTimeout(() => {
           isSyncingRef.current = false
         }, 500)

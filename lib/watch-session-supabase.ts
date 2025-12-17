@@ -8,10 +8,10 @@ export interface WatchSession {
   videoIdentifier: string
   streamUrl: string
   title: string
-  currentTime: number
+  playbackTime: number
   isPlaying: boolean
-  hostId: string
-  participants: string[]
+  hostName: string
+  participants: number
   createdAt: string
   updatedAt: string
 }
@@ -110,14 +110,14 @@ export class WatchSessionManager {
     return this.mapToSession(data)
   }
 
-  async updatePlaybackState(sessionId: string, currentTime: number, isPlaying: boolean): Promise<void> {
+  async updatePlaybackState(sessionId: string, playbackTime: number, isPlaying: boolean): Promise<void> {
     try {
       const response = await fetch("/api/watch-session", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
-          currentTime,
+          playbackTime,
           isPlaying,
         }),
       })
@@ -176,11 +176,11 @@ export class WatchSessionManager {
       videoType: data.video_type,
       videoIdentifier: data.video_identifier,
       streamUrl: data.stream_url,
-      title: data.title,
-      currentTime: data.current_time,
+      title: data.video_title,
+      playbackTime: data.playback_time || 0,
       isPlaying: data.is_playing,
-      hostId: data.host_id,
-      participants: data.participants || [],
+      hostName: data.host_name,
+      participants: data.participants || 1,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     }
