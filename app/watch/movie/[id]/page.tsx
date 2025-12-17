@@ -84,7 +84,7 @@ export default function WatchMoviePage() {
       <div className="w-full h-screen">
         <VideoPlayer
           src={streamUrl}
-          title={movieInfo.info.name}
+          title={`${movieInfo.info.name} ${movieInfo.movie_data.container_extension ? `[${movieInfo.movie_data.container_extension.toUpperCase()}]` : ""}`}
           subtitle={`${movieInfo.info.releaseDate || ""} • ${movieInfo.info.duration || ""}`}
           autoPlay
         />

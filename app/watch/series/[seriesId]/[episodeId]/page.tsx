@@ -159,7 +159,7 @@ export default function WatchSeriesPage() {
       <div className="w-full h-screen">
         <VideoPlayer
           src={streamUrl}
-          title={seriesInfo.info.name}
+          title={`${seriesInfo.info.name} ${currentEp?.container_extension ? `[${currentEp.container_extension.toUpperCase()}]` : ""}`}
           subtitle={`Season ${currentSeason} Episode ${currentEpisode}${currentEp?.title ? ` - ${currentEp.title}` : ""}`}
           onNext={handleNext}
           onPrevious={handlePrevious}
