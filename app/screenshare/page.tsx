@@ -6,13 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Users, ArrowRight, Loader2 } from "lucide-react"
 import { joinWatchSession } from "@/lib/watch-session"
-import { useXtream } from "@/lib/xtream-context"
-import Link from "next/link"
 
 function ScreenshareContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isConnected } = useXtream()
   const [code, setCode] = useState(searchParams.get("code") || "")
   const [error, setError] = useState("")
   const [isJoining, setIsJoining] = useState(false)
@@ -20,22 +17,16 @@ function ScreenshareContent() {
   useEffect(() => {
     // Auto-join if code is in URL
     const urlCode = searchParams.get("code")
-    if (urlCode && isConnected) {
+    if (urlCode) {
       handleJoin(urlCode)
     }
-  }, [searchParams, isConnected])
+  }, [searchParams])
 
   const handleJoin = async (joinCode?: string) => {
     const sessionCode = joinCode || code
 
     if (!sessionCode.trim()) {
       setError("Please enter a session code")
-      return
-    }
-
-    if (!isConnected) {
-      setError("Please connect to your IPTV service first")
-      router.push("/login")
       return
     }
 
@@ -53,42 +44,7 @@ function ScreenshareContent() {
       return
     }
 
-    // Redirect to the appropriate watch page with session ID
-    let watchUrl = ""
-    if (session.videoType === "movie") {
-      watchUrl = `/watch/movie/${session.videoUrl}?session=${session.id}`
-    } else if (session.videoType === "series") {
-      watchUrl = `/watch/series/${session.videoUrl}?session=${session.id}`
-    } else if (session.videoType === "live") {
-      watchUrl = `/watch/live/${session.videoUrl}?session=${session.id}`
-    }
-
-    router.push(watchUrl)
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center space-y-6">
-          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
-            <Users className="w-8 h-8 text-white" />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-              Watch Together
-            </h1>
-            <p className="text-muted-foreground">Please connect to your IPTV service first</p>
-          </div>
-
-          <Link href="/login">
-            <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700">
-              Connect to IPTV
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
+    router.push(`/watch-guest/${session.id}`)
   }
 
   return (
@@ -154,6 +110,10 @@ function ScreenshareContent() {
           <div className="flex items-start gap-3 text-sm text-muted-foreground">
             <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5" />
             <p>Perfect for watching with friends and family remotely</p>
+          </div>
+          <div className="flex items-start gap-3 text-sm text-muted-foreground">
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5" />
+            <p>No IPTV login required for guests</p>
           </div>
         </div>
       </div>

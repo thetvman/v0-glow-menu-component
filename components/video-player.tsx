@@ -20,6 +20,7 @@ interface VideoPlayerProps {
   sessionId?: string
   videoType?: "movie" | "series" | "live"
   videoIdentifier?: string
+  streamUrl?: string // Added streamUrl prop for guest access
 }
 
 export function VideoPlayer({
@@ -35,6 +36,7 @@ export function VideoPlayer({
   sessionId,
   videoType,
   videoIdentifier,
+  streamUrl, // Added streamUrl prop
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -433,11 +435,12 @@ export function VideoPlayer({
               <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
               {subtitle && <p className="text-white/70">{subtitle}</p>}
             </div>
-            {videoType && videoIdentifier && !activeSessionId && (
+            {videoType && videoIdentifier && streamUrl && !activeSessionId && (
               <WatchTogetherButton
                 videoUrl={videoIdentifier}
                 videoTitle={title}
                 videoType={videoType}
+                streamUrl={streamUrl}
                 onSessionCreated={(id) => setActiveSessionId(id)}
               />
             )}

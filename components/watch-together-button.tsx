@@ -10,16 +10,23 @@ interface WatchTogetherButtonProps {
   videoUrl: string
   videoTitle: string
   videoType: "movie" | "series" | "live"
+  streamUrl: string // Added streamUrl prop for guest access
   onSessionCreated?: (sessionId: string, code: string) => void
 }
 
-export function WatchTogetherButton({ videoUrl, videoTitle, videoType, onSessionCreated }: WatchTogetherButtonProps) {
+export function WatchTogetherButton({
+  videoUrl,
+  videoTitle,
+  videoType,
+  streamUrl,
+  onSessionCreated,
+}: WatchTogetherButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [sessionCode, setSessionCode] = useState<string>("")
   const [copied, setCopied] = useState(false)
 
   const handleCreateSession = () => {
-    const session = createWatchSession(videoUrl, videoTitle, videoType)
+    const session = createWatchSession(videoUrl, videoTitle, videoType, streamUrl) // Pass streamUrl to createWatchSession for guest access
     setSessionCode(session.code)
     setIsOpen(true)
     onSessionCreated?.(session.id, session.code)
@@ -87,6 +94,7 @@ export function WatchTogetherButton({ videoUrl, videoTitle, videoType, onSession
               <p className="text-xs text-muted-foreground">✓ Everyone can control playback</p>
               <p className="text-xs text-muted-foreground">✓ Automatically syncs play, pause, and seek</p>
               <p className="text-xs text-muted-foreground">✓ Session expires after 24 hours</p>
+              <p className="text-xs text-muted-foreground">✓ Guests can join without IPTV login</p>
             </div>
           </div>
         </DialogContent>

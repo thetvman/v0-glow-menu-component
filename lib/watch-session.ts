@@ -5,6 +5,7 @@ export interface WatchSession {
   videoUrl: string
   videoTitle: string
   videoType: "movie" | "series" | "live"
+  streamUrl: string // Direct stream URL for guests
   currentTime: number
   isPlaying: boolean
   participants: string[]
@@ -32,6 +33,7 @@ export function createWatchSession(
   videoUrl: string,
   videoTitle: string,
   videoType: "movie" | "series" | "live",
+  streamUrl: string, // Added streamUrl parameter
 ): WatchSession {
   const code = generateSessionCode()
   const hostId = getOrCreateParticipantId()
@@ -43,6 +45,7 @@ export function createWatchSession(
     videoUrl,
     videoTitle,
     videoType,
+    streamUrl, // Store stream URL for guests
     currentTime: 0,
     isPlaying: false,
     participants: [hostId],

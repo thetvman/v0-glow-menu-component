@@ -90,6 +90,7 @@ export default function WatchMoviePage() {
           sessionId={sessionId}
           videoType="movie"
           videoIdentifier={params.id as string}
+          streamUrl={streamUrl} // Pass streamUrl for guest access
         />
       </div>
 
