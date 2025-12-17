@@ -10,7 +10,7 @@ interface WatchTogetherButtonProps {
   videoUrl: string
   videoTitle: string
   videoType: "movie" | "series" | "live"
-  streamUrl: string // Added streamUrl prop for guest access
+  streamUrl: string
   onSessionCreated?: (sessionId: string, code: string) => void
 }
 
@@ -26,7 +26,9 @@ export function WatchTogetherButton({
   const [copied, setCopied] = useState(false)
 
   const handleCreateSession = () => {
-    const session = createWatchSession(videoUrl, videoTitle, videoType, streamUrl) // Pass streamUrl to createWatchSession for guest access
+    console.log("[v0] Creating watch session...")
+    const session = createWatchSession(videoUrl, videoTitle, videoType, streamUrl)
+    console.log("[v0] Session created:", session.id, "Code:", session.code)
     setSessionCode(session.code)
     setIsOpen(true)
     onSessionCreated?.(session.id, session.code)
@@ -38,7 +40,7 @@ export function WatchTogetherButton({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const shareUrl = `${window.location.origin}/screenshare?code=${sessionCode}`
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/screenshare?code=${sessionCode}` : ""
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl)
