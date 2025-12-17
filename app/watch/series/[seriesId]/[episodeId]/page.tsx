@@ -172,6 +172,7 @@ export default function WatchSeriesPage() {
           sessionId={sessionId}
           videoType="series"
           videoIdentifier={`${seriesId}/${episodeId}`}
+          streamUrl={streamUrl} // Added streamUrl prop for watch together button to appear
         />
       </div>
 
