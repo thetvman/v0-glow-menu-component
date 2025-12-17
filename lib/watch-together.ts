@@ -99,10 +99,12 @@ export class WatchTogetherManager {
   // Subscribe to session changes
   subscribe(sessionId: string, callback: (session: WatchSession) => void): void {
     if (this.channel) {
+      console.log("[v0] 🔌 Unsubscribing from previous channel")
       this.channel.unsubscribe()
     }
 
-    console.log("[v0] 🔌 Setting up realtime subscription for session:", sessionId)
+    const deviceId = Math.random().toString(36).substring(7)
+    console.log("[v0] 🔌 Device ID:", deviceId, "- Setting up realtime subscription for session:", sessionId)
 
     this.channel = this.supabase
       .channel(`session:${sessionId}`)
@@ -115,15 +117,17 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log("[v0] ⚡ UPDATE event received from Supabase!", payload)
-          if (payload.new) {
+          console.log(`[v0] ⚡ Device ${deviceId} received UPDATE event from Supabase!`, payload)
+          if (payload.new && payload.new.id === sessionId) {
             const session = this.mapSession(payload.new)
-            console.log("[v0] 🔄 Syncing playback state:", {
+            console.log(`[v0] 🔄 Device ${deviceId} syncing playback state:`, {
               time: session.playbackTime,
               playing: session.isPlaying,
               participants: session.participants,
             })
             callback(session)
+          } else {
+            console.warn(`[v0] ⚠️ Device ${deviceId} received update for wrong session!`, payload.new?.id)
           }
         },
       )
@@ -136,20 +140,22 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log("[v0] ⚡ INSERT event received (new participant)!", payload)
+          console.log(`[v0] ⚡ Device ${deviceId} INSERT event received (new participant)!`, payload)
         },
       )
       .subscribe((status, err) => {
         if (err) {
-          console.error("[v0] ❌ Subscription error:", err)
+          console.error(`[v0] ❌ Device ${deviceId} subscription error:`, err)
         }
-        console.log("[v0] 📡 Subscription status:", status)
+        console.log(`[v0] 📡 Device ${deviceId} subscription status:`, status, "for session:", sessionId)
         if (status === "SUBSCRIBED") {
-          console.log("[v0] ✅ Successfully subscribed to realtime updates for session:", sessionId)
+          console.log(`[v0] ✅ Device ${deviceId} successfully subscribed to realtime updates for session:`, sessionId)
         } else if (status === "CHANNEL_ERROR") {
-          console.error("[v0] ❌ Channel error - realtime may not be enabled on watch_sessions table")
+          console.error(
+            `[v0] ❌ Device ${deviceId} channel error - realtime may not be enabled on watch_sessions table`,
+          )
         } else if (status === "TIMED_OUT") {
-          console.error("[v0] ⏱️ Subscription timed out - check network connection")
+          console.error(`[v0] ⏱️ Device ${deviceId} subscription timed out - check network connection`)
         }
       })
   }
