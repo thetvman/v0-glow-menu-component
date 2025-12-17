@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { VideoPlayer } from "@/components/video-player"
-import { getSession, type WatchSession } from "@/lib/watch-session"
+import { WatchSessionManager, type WatchSession } from "@/lib/watch-session-supabase"
 import { ArrowLeft, Users } from "lucide-react"
 import Link from "next/link"
 
@@ -15,11 +15,12 @@ export default function WatchGuestPage() {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    const loadSession = () => {
+    const loadSession = async () => {
       try {
         setLoading(true)
         const sessionId = params.sessionId as string
-        const foundSession = getSession(sessionId)
+        const manager = new WatchSessionManager()
+        const foundSession = await manager.getSession(sessionId)
 
         if (!foundSession) {
           setError("Session not found or expired")
@@ -36,10 +37,6 @@ export default function WatchGuestPage() {
     }
 
     loadSession()
-
-    // Refresh session data periodically
-    const interval = setInterval(loadSession, 2000)
-    return () => clearInterval(interval)
   }, [params.sessionId])
 
   if (loading) {
@@ -90,7 +87,7 @@ export default function WatchGuestPage() {
       <div className="w-full h-screen">
         <VideoPlayer
           src={session.streamUrl}
-          title={session.videoTitle}
+          title={session.title}
           subtitle="Watching Together"
           autoPlay
           sessionId={session.id}
@@ -100,7 +97,7 @@ export default function WatchGuestPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl">
-          <h1 className="text-3xl font-bold mb-4">{session.videoTitle}</h1>
+          <h1 className="text-3xl font-bold mb-4">{session.title}</h1>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />

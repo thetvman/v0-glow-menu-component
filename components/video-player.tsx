@@ -5,7 +5,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { Play, Pause, Volume2, VolumeX, Maximize, SkipForward, SkipBack } from "lucide-react"
 import { WatchTogetherButton } from "./watch-together-button"
-import { updateSessionState, getSession } from "@/lib/watch-session"
+import { WatchSessionManager, type WatchSession } from "@/lib/watch-session-supabase"
 
 interface VideoPlayerProps {
   src: string
@@ -51,7 +51,7 @@ export function VideoPlayer({
   const controlsTimeoutRef = useRef<NodeJS.Timeout>()
   const hlsRef = useRef<any>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId)
-  const syncIntervalRef = useRef<NodeJS.Timeout>()
+  const sessionManagerRef = useRef<WatchSessionManager | null>(null)
   const isSyncingRef = useRef(false)
 
   useEffect(() => {
@@ -242,23 +242,19 @@ export function VideoPlayer({
 
     console.log("[v0] Starting watch together sync for session:", activeSessionId)
 
-    const syncToSession = () => {
-      if (isSyncingRef.current) return
-      updateSessionState(activeSessionId, {
-        currentTime: videoRef.current?.currentTime || 0,
-        isPlaying,
-      })
-    }
+    const manager = new WatchSessionManager()
+    sessionManagerRef.current = manager
 
-    const syncFromSession = () => {
+    // Subscribe to realtime updates
+    manager.subscribeToSession(activeSessionId, (session: WatchSession) => {
       if (isSyncingRef.current) return
-
-      const session = getSession(activeSessionId)
-      if (!session) return
 
       const video = videoRef.current
       if (!video) return
 
+      console.log("[v0] Received session update:", session)
+
+      // Sync playback state
       if (session.isPlaying !== isPlaying) {
         isSyncingRef.current = true
         if (session.isPlaying) {
@@ -271,6 +267,7 @@ export function VideoPlayer({
         }, 500)
       }
 
+      // Sync time if difference is > 2 seconds
       const timeDiff = Math.abs((video.currentTime || 0) - session.currentTime)
       if (timeDiff > 2) {
         console.log("[v0] Syncing time difference:", timeDiff)
@@ -280,17 +277,18 @@ export function VideoPlayer({
           isSyncingRef.current = false
         }, 500)
       }
-    }
+    })
 
-    syncIntervalRef.current = setInterval(() => {
-      syncToSession()
-      syncFromSession()
+    // Update session state periodically
+    const syncInterval = setInterval(() => {
+      if (isSyncingRef.current) return
+      manager.updatePlaybackState(activeSessionId, videoRef.current?.currentTime || 0, isPlaying)
     }, 2000)
 
     return () => {
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current)
-      }
+      clearInterval(syncInterval)
+      manager.unsubscribe()
+      sessionManagerRef.current = null
     }
   }, [activeSessionId, isPlaying])
 

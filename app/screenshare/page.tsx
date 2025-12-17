@@ -4,8 +4,8 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Users, ArrowRight, Loader2 } from "lucide-react"
-import { joinWatchSession } from "@/lib/watch-session"
+import { Users, ArrowRight, Loader2, AlertCircle } from "lucide-react"
+import { WatchSessionManager } from "@/lib/watch-session-supabase"
 
 function ScreenshareContent() {
   const router = useRouter()
@@ -15,9 +15,8 @@ function ScreenshareContent() {
   const [isJoining, setIsJoining] = useState(false)
 
   useEffect(() => {
-    // Auto-join if code is in URL
     const urlCode = searchParams.get("code")
-    if (urlCode) {
+    if (urlCode && urlCode.length === 6) {
       handleJoin(urlCode)
     }
   }, [searchParams])
@@ -30,21 +29,34 @@ function ScreenshareContent() {
       return
     }
 
-    setIsJoining(true)
-    setError("")
-
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    const session = joinWatchSession(sessionCode)
-
-    if (!session) {
-      setError("Invalid session code. Please check and try again.")
-      setIsJoining(false)
+    if (sessionCode.length !== 6) {
+      setError("Session code must be 6 characters")
       return
     }
 
-    router.push(`/watch-guest/${session.id}`)
+    setIsJoining(true)
+    setError("")
+
+    console.log("[v0] Joining session with code:", sessionCode)
+
+    try {
+      const manager = new WatchSessionManager()
+      const session = await manager.joinSession(sessionCode)
+
+      if (!session) {
+        setError("Session not found. Please check the code and try again.")
+        setIsJoining(false)
+        console.log("[v0] Failed to join - session not found")
+        return
+      }
+
+      console.log("[v0] Successfully joined session, redirecting...")
+      router.push(`/watch-guest/${session.id}`)
+    } catch (error) {
+      console.error("[v0] Error joining session:", error)
+      setError("Failed to join session. Please try again.")
+      setIsJoining(false)
+    }
   }
 
   return (
@@ -63,6 +75,16 @@ function ScreenshareContent() {
           </div>
         </div>
 
+        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 flex gap-3">
+          <AlertCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-green-500">Cross-Device Ready</p>
+            <p className="text-xs text-muted-foreground">
+              Watch together from any device! Real-time sync powered by Supabase.
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-4">
           <div className="space-y-2">
             <Input
@@ -76,12 +98,16 @@ function ScreenshareContent() {
               className="text-center text-2xl font-bold tracking-wider h-14 border-2 focus:border-purple-500"
               disabled={isJoining}
             />
-            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded p-3">
+                <p className="text-sm text-red-500 text-center">{error}</p>
+              </div>
+            )}
           </div>
 
           <Button
             onClick={() => handleJoin()}
-            disabled={isJoining || code.length < 6}
+            disabled={isJoining || code.length !== 6}
             className="w-full h-12 text-lg bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700"
           >
             {isJoining ? (

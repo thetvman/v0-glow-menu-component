@@ -29,11 +29,20 @@ export function generateSessionCode(): string {
 const SESSIONS_KEY = "watch_sessions"
 const PARTICIPANT_KEY = "watch_participant"
 
+let sessionChannel: BroadcastChannel | null = null
+if (typeof window !== "undefined") {
+  try {
+    sessionChannel = new BroadcastChannel("watch_sessions_sync")
+  } catch (e) {
+    console.warn("BroadcastChannel not supported")
+  }
+}
+
 export function createWatchSession(
   videoUrl: string,
   videoTitle: string,
   videoType: "movie" | "series" | "live",
-  streamUrl: string, // Added streamUrl parameter
+  streamUrl: string,
 ): WatchSession {
   const code = generateSessionCode()
   const hostId = getOrCreateParticipantId()
@@ -45,7 +54,7 @@ export function createWatchSession(
     videoUrl,
     videoTitle,
     videoType,
-    streamUrl, // Store stream URL for guests
+    streamUrl,
     currentTime: 0,
     isPlaying: false,
     participants: [hostId],
@@ -54,14 +63,24 @@ export function createWatchSession(
   }
 
   saveSession(session)
+  broadcastSessionUpdate(session)
+  console.log("[v0] Session created and broadcasted:", session.code)
   return session
 }
 
 export function joinWatchSession(code: string): WatchSession | null {
+  console.log("[v0] Attempting to join session with code:", code)
   const sessions = getAllSessions()
+  console.log(
+    "[v0] Available sessions:",
+    sessions.map((s) => s.code),
+  )
   const session = sessions.find((s) => s.code === code.toUpperCase())
 
-  if (!session) return null
+  if (!session) {
+    console.log("[v0] Session not found for code:", code)
+    return null
+  }
 
   const participantId = getOrCreateParticipantId()
 
@@ -69,8 +88,10 @@ export function joinWatchSession(code: string): WatchSession | null {
     session.participants.push(participantId)
     session.lastUpdate = Date.now()
     saveSession(session)
+    broadcastSessionUpdate(session)
   }
 
+  console.log("[v0] Successfully joined session:", session.code)
   return session
 }
 
@@ -85,6 +106,7 @@ export function updateSessionState(
     Object.assign(session, updates)
     session.lastUpdate = Date.now()
     saveSession(session)
+    broadcastSessionUpdate(session)
   }
 }
 
@@ -106,6 +128,7 @@ export function leaveSession(sessionId: string): void {
       deleteSession(sessionId)
     } else {
       saveSession(session)
+      broadcastSessionUpdate(session)
     }
   }
 }
@@ -145,6 +168,7 @@ function saveSession(session: WatchSession): void {
   }
 
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions))
+  console.log("[v0] Session saved to localStorage:", session.code)
 }
 
 function deleteSession(sessionId: string): void {
@@ -166,4 +190,27 @@ function getOrCreateParticipantId(): string {
   }
 
   return participantId
+}
+
+function broadcastSessionUpdate(session: WatchSession): void {
+  if (sessionChannel) {
+    try {
+      sessionChannel.postMessage({
+        type: "session_update",
+        session,
+      })
+    } catch (e) {
+      console.warn("Failed to broadcast session update:", e)
+    }
+  }
+}
+
+if (typeof window !== "undefined" && sessionChannel) {
+  sessionChannel.onmessage = (event) => {
+    if (event.data.type === "session_update") {
+      const session = event.data.session
+      saveSession(session)
+      console.log("[v0] Received session update:", session.code)
+    }
+  }
 }
