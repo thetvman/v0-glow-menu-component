@@ -104,15 +104,33 @@ The watch together feature allows users to share streaming sessions:
 
 ## Deployment
 
-This project is deployed on Vercel and automatically syncs with v0.app.
+### Deploy to Vercel (Automatic - Recommended)
+
+**When you deploy from v0 or connect this repo to Vercel, Supabase environment variables are automatically included!**
+
+1. **From v0:** Click the "Publish" button in v0's interface
+2. **From GitHub:** Connect your repository to Vercel
+
+✅ No manual environment variable setup needed for Supabase
+✅ Database migrations run automatically
+✅ Ready to use immediately
 
 **Live URL:** [https://vercel.com/ffrgtrf1-6953s-projects/v0-glow-menu-component-y8](https://vercel.com/ffrgtrf1-6953s-projects/v0-glow-menu-component-y8)
 
-To deploy your own:
+### Manual Deployment
+
+If deploying manually to Vercel:
 
 1. Push to GitHub
-2. Import to Vercel
-3. Add environment variables in Vercel dashboard
+2. Import to Vercel from dashboard
+3. Add Supabase integration from Vercel's marketplace, OR manually add these environment variables:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   SUPABASE_URL
+   SUPABASE_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY
+   ```
 4. Deploy!
 
 ## Testing on Other Devices

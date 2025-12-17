@@ -78,21 +78,16 @@ export class WatchSessionManager {
       return null
     }
 
-    // Add current participant to the session
-    const participantId = getParticipantId()
-    const participants = data.participants as string[]
+    const currentParticipants = data.participants || 1
+    const { error: updateError } = await this.supabase
+      .from("watch_sessions")
+      .update({
+        participants: currentParticipants + 1,
+      })
+      .eq("id", data.id)
 
-    if (!participants.includes(participantId)) {
-      const { error: updateError } = await this.supabase
-        .from("watch_sessions")
-        .update({
-          participants: [...participants, participantId],
-        })
-        .eq("id", data.id)
-
-      if (updateError) {
-        console.error("[v0] Error adding participant:", updateError)
-      }
+    if (updateError) {
+      console.error("[v0] Error incrementing participant count:", updateError)
     }
 
     console.log("[v0] Joined watch session:", data)
