@@ -36,7 +36,7 @@ export function VideoPlayer({
   sessionId,
   videoType,
   videoIdentifier,
-  streamUrl, // Added streamUrl prop
+  streamUrl,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -53,6 +53,8 @@ export function VideoPlayer({
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId)
   const sessionManagerRef = useRef<WatchSessionManager | null>(null)
   const isSyncingRef = useRef(false)
+  const [waitingForGuest, setWaitingForGuest] = useState(false)
+  const [participantCount, setParticipantCount] = useState(1)
 
   useEffect(() => {
     const video = videoRef.current
@@ -245,7 +247,19 @@ export function VideoPlayer({
     const manager = new WatchSessionManager()
     sessionManagerRef.current = manager
 
-    // Subscribe to realtime updates
+    manager.getSession(activeSessionId).then((session) => {
+      if (session && session.participants === 1) {
+        console.log("[v0] Host waiting for guests to join...")
+        setWaitingForGuest(true)
+        setParticipantCount(1)
+        const video = videoRef.current
+        if (video && !video.paused) {
+          video.pause()
+          setIsPlaying(false)
+        }
+      }
+    })
+
     manager.subscribeToSession(activeSessionId, (session: WatchSession) => {
       if (isSyncingRef.current) return
 
@@ -254,7 +268,12 @@ export function VideoPlayer({
 
       console.log("[v0] Received session update:", session)
 
-      // Sync playback state
+      setParticipantCount(session.participants)
+      if (session.participants > 1 && waitingForGuest) {
+        console.log("[v0] Guest joined! Enabling playback...")
+        setWaitingForGuest(false)
+      }
+
       if (session.isPlaying !== isPlaying) {
         isSyncingRef.current = true
         if (session.isPlaying) {
@@ -267,7 +286,6 @@ export function VideoPlayer({
         }, 500)
       }
 
-      // Sync time if difference is > 2 seconds
       const timeDiff = Math.abs((video.currentTime || 0) - session.playbackTime)
       if (timeDiff > 2) {
         console.log("[v0] Syncing time difference:", timeDiff)
@@ -279,7 +297,6 @@ export function VideoPlayer({
       }
     })
 
-    // Update session state periodically
     const syncInterval = setInterval(() => {
       if (isSyncingRef.current) return
       manager.updatePlaybackState(activeSessionId, videoRef.current?.currentTime || 0, isPlaying)
@@ -290,7 +307,7 @@ export function VideoPlayer({
       manager.unsubscribe()
       sessionManagerRef.current = null
     }
-  }, [activeSessionId, isPlaying])
+  }, [activeSessionId, isPlaying, waitingForGuest])
 
   const togglePlay = () => {
     const video = videoRef.current
@@ -416,6 +433,20 @@ export function VideoPlayer({
         </div>
       )}
 
+      {waitingForGuest && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 pointer-events-none">
+          <div className="text-center px-6">
+            <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-2xl font-bold text-white mb-2">Waiting for guests to join...</p>
+            <p className="text-white/70 mb-4">Video will start once someone joins your session</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-full">
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+              <span className="text-sm text-purple-300">Session Active</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -444,7 +475,9 @@ export function VideoPlayer({
             )}
             {activeSessionId && (
               <div className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
-                <p className="text-sm text-white/90">Watching Together</p>
+                <p className="text-sm text-white/90">
+                  Watching Together {participantCount > 1 && `(${participantCount} viewers)`}
+                </p>
               </div>
             )}
           </div>
