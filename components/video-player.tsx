@@ -120,12 +120,19 @@ export function VideoPlayer({
     manager.subscribe(activeSessionId, (session: WatchSession) => {
       if (syncingRef.current) return
 
-      console.log("[v0] Sync:", session.participants, "watching,", session.isPlaying ? "playing" : "paused")
+      console.log("[v0] 📡 Received sync update:", {
+        participants: session.participants,
+        playbackTime: session.playbackTime.toFixed(2),
+        isPlaying: session.isPlaying,
+        currentVideoTime: video.currentTime.toFixed(2),
+        currentlyPlaying: !video.paused,
+      })
 
       setParticipants(session.participants)
 
       // Stop waiting when guest joins
       if (session.participants > 1 && waitingForGuest) {
+        console.log("[v0] Guest joined! Starting playback")
         setWaitingForGuest(false)
       }
 
@@ -133,14 +140,23 @@ export function VideoPlayer({
 
       // Sync playback state
       if (session.isPlaying && video.paused) {
+        console.log("[v0] ▶️ Starting playback (received play command)")
         video.play()
       } else if (!session.isPlaying && !video.paused) {
+        console.log("[v0] ⏸️ Pausing playback (received pause command)")
         video.pause()
       }
 
       // Sync time if off by more than 2 seconds
       const timeDiff = Math.abs(video.currentTime - session.playbackTime)
       if (timeDiff > 2) {
+        console.log(
+          "[v0] ⏩ Seeking to:",
+          session.playbackTime.toFixed(2),
+          "(was at:",
+          video.currentTime.toFixed(2),
+          ")",
+        )
         video.currentTime = session.playbackTime
       }
 

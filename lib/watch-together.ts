@@ -102,6 +102,8 @@ export class WatchTogetherManager {
       this.channel.unsubscribe()
     }
 
+    console.log("[v0] Setting up realtime subscription for session:", sessionId)
+
     this.channel = this.supabase
       .channel(`session:${sessionId}`)
       .on(
@@ -113,13 +115,27 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          console.log("[v0] Sync update received")
+          console.log("[v0] ⚡ Realtime update received!", payload)
           if (payload.new) {
-            callback(this.mapSession(payload.new))
+            const session = this.mapSession(payload.new)
+            console.log("[v0] Syncing to:", {
+              time: session.playbackTime,
+              playing: session.isPlaying,
+              participants: session.participants,
+            })
+            callback(session)
           }
         },
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        console.log("[v0] Subscription status:", status)
+        if (err) {
+          console.error("[v0] Subscription error:", err)
+        }
+        if (status === "SUBSCRIBED") {
+          console.log("[v0] ✅ Successfully subscribed to realtime updates")
+        }
+      })
   }
 
   unsubscribe(): void {
