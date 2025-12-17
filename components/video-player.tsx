@@ -37,12 +37,15 @@ export function VideoPlayer({
   const [showControls, setShowControls] = useState(true)
   const [isBuffering, setIsBuffering] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isHlsReady, setIsHlsReady] = useState(false)
   const controlsTimeoutRef = useRef<NodeJS.Timeout>()
   const hlsRef = useRef<any>(null)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
+
+    setIsHlsReady(false)
 
     const loadHLS = async () => {
       console.log("[v0] Loading video source:", src)
@@ -74,17 +77,23 @@ export function VideoPlayer({
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               console.log("[v0] HLS manifest parsed successfully")
               setIsBuffering(false)
+              setIsHlsReady(true)
+
               if (autoPlay) {
-                video
-                  .play()
-                  .then(() => {
-                    console.log("[v0] Playback started")
-                    setIsPlaying(true)
-                  })
-                  .catch((err) => {
-                    console.error("[v0] Autoplay failed:", err)
-                    setError("Autoplay was prevented. Click play to start.")
-                  })
+                setTimeout(() => {
+                  video
+                    .play()
+                    .then(() => {
+                      console.log("[v0] Playback started")
+                      setIsPlaying(true)
+                      setError(null)
+                    })
+                    .catch((err) => {
+                      console.error("[v0] Autoplay failed:", err)
+                      setError("Autoplay was prevented. Click play to start.")
+                      setIsPlaying(false)
+                    })
+                }, 100)
               }
             })
 
@@ -114,13 +123,18 @@ export function VideoPlayer({
             console.log("[v0] Using native HLS support")
             video.src = src
             setIsBuffering(false)
+            setIsHlsReady(true)
             if (autoPlay) {
               video
                 .play()
-                .then(() => setIsPlaying(true))
+                .then(() => {
+                  setIsPlaying(true)
+                  setError(null)
+                })
                 .catch((err) => {
                   console.error("[v0] Autoplay failed:", err)
                   setError("Autoplay was prevented. Click play to start.")
+                  setIsPlaying(false)
                 })
             }
           } else {
@@ -135,13 +149,18 @@ export function VideoPlayer({
         console.log("[v0] Using standard video source")
         video.src = src
         setIsBuffering(false)
+        setIsHlsReady(true)
         if (autoPlay) {
           video
             .play()
-            .then(() => setIsPlaying(true))
+            .then(() => {
+              setIsPlaying(true)
+              setError(null)
+            })
             .catch((err) => {
               console.error("[v0] Autoplay failed:", err)
               setError("Autoplay was prevented. Click play to start.")
+              setIsPlaying(false)
             })
         }
       }
@@ -157,6 +176,13 @@ export function VideoPlayer({
     }
     const handleWaiting = () => setIsBuffering(true)
     const handleCanPlay = () => setIsBuffering(false)
+    const handlePlay = () => {
+      setIsPlaying(true)
+      setError(null)
+    }
+    const handlePause = () => {
+      setIsPlaying(false)
+    }
     const handleError = (e: Event) => {
       console.error("[v0] Video element error:", e)
       const videoError = video.error
@@ -172,6 +198,8 @@ export function VideoPlayer({
     video.addEventListener("ended", handleEnded)
     video.addEventListener("waiting", handleWaiting)
     video.addEventListener("canplay", handleCanPlay)
+    video.addEventListener("play", handlePlay)
+    video.addEventListener("pause", handlePause)
     video.addEventListener("error", handleError)
 
     return () => {
@@ -180,6 +208,8 @@ export function VideoPlayer({
       video.removeEventListener("ended", handleEnded)
       video.removeEventListener("waiting", handleWaiting)
       video.removeEventListener("canplay", handleCanPlay)
+      video.removeEventListener("play", handlePlay)
+      video.removeEventListener("pause", handlePause)
       video.removeEventListener("error", handleError)
 
       if (hlsRef.current) {
@@ -193,14 +223,26 @@ export function VideoPlayer({
     const video = videoRef.current
     if (!video) return
 
+    if (!isHlsReady && src.includes(".m3u8")) {
+      console.log("[v0] HLS not ready yet, waiting...")
+      return
+    }
+
     if (isPlaying) {
       video.pause()
       setIsPlaying(false)
     } else {
+      setError(null)
       video
         .play()
-        .then(() => setIsPlaying(true))
-        .catch(console.error)
+        .then(() => {
+          console.log("[v0] Manual play successful")
+          setIsPlaying(true)
+        })
+        .catch((err) => {
+          console.error("[v0] Manual play failed:", err)
+          setError("Unable to play video. Please try again.")
+        })
     }
   }
 
@@ -285,11 +327,18 @@ export function VideoPlayer({
     >
       <video ref={videoRef} className="w-full h-full" onClick={togglePlay} />
 
-      {error && !isBuffering && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 pointer-events-none">
+      {error && !isPlaying && (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/80 cursor-pointer"
+          onClick={togglePlay}
+        >
           <div className="text-center px-6">
             <p className="text-red-500 text-lg mb-2">Playback Error</p>
-            <p className="text-white/70">{error}</p>
+            <p className="text-white/70 mb-4">{error}</p>
+            <button className="px-6 py-3 bg-primary rounded-full text-white font-medium hover:bg-primary/80 transition-colors flex items-center gap-2 mx-auto">
+              <Play className="w-5 h-5" />
+              Click to Play
+            </button>
           </div>
         </div>
       )}
