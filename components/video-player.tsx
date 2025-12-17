@@ -504,6 +504,22 @@ export function VideoPlayer({
         </div>
       )}
 
+      {activeSessionId && participantCount > 1 && (
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 rounded-full text-sm text-white font-medium flex items-center gap-2 shadow-lg">
+            <Users className="w-4 h-4" />
+            <span>{participantCount} watching</span>
+          </div>
+          <button
+            onClick={handleRestartForAll}
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 p-3 rounded-full text-white hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg"
+            title="Restart for everyone"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       <div
         className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity duration-300 ${
           showControls ? "opacity-100" : "opacity-0"
@@ -525,8 +541,8 @@ export function VideoPlayer({
               />
             )}
             {activeSessionId && (
-              <div className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
-                <p className="text-sm text-white/90">
+              <div className="px-4 py-2 bg-gradient-to-r from-purple-600/90 to-pink-600/90 border border-purple-400/50 rounded-lg backdrop-blur-sm shadow-lg">
+                <p className="text-sm text-white font-medium">
                   Watching Together {participantCount > 1 && `(${participantCount} viewers)`}
                 </p>
               </div>
@@ -613,22 +629,6 @@ export function VideoPlayer({
                 />
               </div>
             </div>
-
-            {activeSessionId && participantCount > 1 && (
-              <div className="absolute top-20 right-4 z-40 flex items-center gap-2">
-                <div className="bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-white flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  <span>{participantCount}</span>
-                </div>
-                <button
-                  onClick={handleRestartForAll}
-                  className="bg-black/60 backdrop-blur-sm p-2 rounded-full text-white hover:bg-black/80 transition-colors"
-                  title="Restart for everyone"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-              </div>
-            )}
 
             <button
               onClick={toggleFullscreen}
