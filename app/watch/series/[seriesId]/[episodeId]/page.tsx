@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
 import { VideoPlayer } from "@/components/video-player"
 import type { SeriesInfo } from "@/types/xtream"
@@ -11,6 +11,7 @@ import Link from "next/link"
 export default function WatchSeriesPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { api, isConnected } = useXtream()
   const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null)
   const [streamUrl, setStreamUrl] = useState("")
@@ -18,6 +19,7 @@ export default function WatchSeriesPage() {
   const [error, setError] = useState("")
   const [currentSeason, setCurrentSeason] = useState(1)
   const [currentEpisode, setCurrentEpisode] = useState(1)
+  const sessionId = searchParams.get("session") || undefined
 
   const seriesId = Number.parseInt(params.seriesId as string)
   const episodeId = params.episodeId as string
@@ -34,7 +36,6 @@ export default function WatchSeriesPage() {
         const info = await api.getSeriesInfo(seriesId)
         setSeriesInfo(info)
 
-        // Find current episode
         let foundEpisode: any = null
         let foundSeason = 1
 
@@ -80,7 +81,6 @@ export default function WatchSeriesPage() {
     if (currentIndex < episodes.length - 1) {
       return episodes[currentIndex + 1]
     }
-    // Check next season
     const nextSeasonEpisodes = seriesInfo.episodes[(currentSeason + 1).toString()]
     if (nextSeasonEpisodes && nextSeasonEpisodes.length > 0) {
       return nextSeasonEpisodes[0]
@@ -95,7 +95,6 @@ export default function WatchSeriesPage() {
     if (currentIndex > 0) {
       return episodes[currentIndex - 1]
     }
-    // Check previous season
     const prevSeasonEpisodes = seriesInfo.episodes[(currentSeason - 1).toString()]
     if (prevSeasonEpisodes && prevSeasonEpisodes.length > 0) {
       return prevSeasonEpisodes[prevSeasonEpisodes.length - 1]
@@ -106,14 +105,20 @@ export default function WatchSeriesPage() {
   const handleNext = () => {
     const next = getNextEpisode()
     if (next) {
-      router.push(`/watch/series/${seriesId}/${next.id}`)
+      const url = sessionId
+        ? `/watch/series/${seriesId}/${next.id}?session=${sessionId}`
+        : `/watch/series/${seriesId}/${next.id}`
+      router.push(url)
     }
   }
 
   const handlePrevious = () => {
     const prev = getPreviousEpisode()
     if (prev) {
-      router.push(`/watch/series/${seriesId}/${prev.id}`)
+      const url = sessionId
+        ? `/watch/series/${seriesId}/${prev.id}?session=${sessionId}`
+        : `/watch/series/${seriesId}/${prev.id}`
+      router.push(url)
     }
   }
 
@@ -143,7 +148,6 @@ export default function WatchSeriesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Back Button */}
       <div className="absolute top-4 left-4 z-50">
         <Link
           href="/series"
@@ -155,7 +159,6 @@ export default function WatchSeriesPage() {
         </Link>
       </div>
 
-      {/* Video Player */}
       <div className="w-full h-screen">
         <VideoPlayer
           src={streamUrl}
@@ -166,10 +169,12 @@ export default function WatchSeriesPage() {
           hasNext={!!getNextEpisode()}
           hasPrevious={!!getPreviousEpisode()}
           autoPlay
+          sessionId={sessionId}
+          videoType="series"
+          videoIdentifier={`${seriesId}/${episodeId}`}
         />
       </div>
 
-      {/* Episode Details & Selector */}
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl">
           <h1 className="text-3xl font-bold mb-2">{seriesInfo.info.name}</h1>
@@ -180,7 +185,6 @@ export default function WatchSeriesPage() {
 
           {currentEp?.info.plot && <p className="text-muted-foreground mb-8">{currentEp.info.plot}</p>}
 
-          {/* Episodes Grid */}
           <div className="space-y-6">
             {Object.keys(seriesInfo.episodes)
               .sort((a, b) => Number.parseInt(a) - Number.parseInt(b))
@@ -193,7 +197,11 @@ export default function WatchSeriesPage() {
                       {episodes.map((ep) => (
                         <Link
                           key={ep.id}
-                          href={`/watch/series/${seriesId}/${ep.id}`}
+                          href={
+                            sessionId
+                              ? `/watch/series/${seriesId}/${ep.id}?session=${sessionId}`
+                              : `/watch/series/${seriesId}/${ep.id}`
+                          }
                           className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${
                             ep.id === episodeId
                               ? "border-primary bg-primary/10"

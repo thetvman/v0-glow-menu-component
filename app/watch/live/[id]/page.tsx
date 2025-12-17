@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
 import { VideoPlayer } from "@/components/video-player"
 import { ArrowLeft } from "lucide-react"
@@ -10,11 +10,13 @@ import Link from "next/link"
 export default function WatchLivePage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { api, isConnected } = useXtream()
   const [channelName, setChannelName] = useState("")
   const [streamUrl, setStreamUrl] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const sessionId = searchParams.get("session") || undefined
 
   useEffect(() => {
     if (!isConnected || !api) {
@@ -27,7 +29,6 @@ export default function WatchLivePage() {
         setLoading(true)
         const channelId = Number.parseInt(params.id as string)
 
-        // Get all live streams to find the channel name
         const streams = await api.getLiveStreams()
         const channel = streams.find((s) => s.stream_id === channelId)
 
@@ -70,7 +71,6 @@ export default function WatchLivePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Back Button */}
       <div className="absolute top-4 left-4 z-50">
         <Link
           href="/live"
@@ -82,9 +82,16 @@ export default function WatchLivePage() {
         </Link>
       </div>
 
-      {/* Video Player */}
       <div className="w-full h-screen">
-        <VideoPlayer src={streamUrl} title={channelName} subtitle="Live TV" autoPlay />
+        <VideoPlayer
+          src={streamUrl}
+          title={channelName}
+          subtitle="Live TV"
+          autoPlay
+          sessionId={sessionId}
+          videoType="live"
+          videoIdentifier={params.id as string}
+        />
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
 import { VideoPlayer } from "@/components/video-player"
 import type { VodInfo } from "@/types/xtream"
@@ -11,11 +11,13 @@ import Link from "next/link"
 export default function WatchMoviePage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { api, isConnected } = useXtream()
   const [movieInfo, setMovieInfo] = useState<VodInfo | null>(null)
   const [streamUrl, setStreamUrl] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const sessionId = searchParams.get("session") || undefined
 
   useEffect(() => {
     if (!isConnected || !api) {
@@ -68,7 +70,6 @@ export default function WatchMoviePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Back Button */}
       <div className="absolute top-4 left-4 z-50">
         <Link
           href="/movies"
@@ -80,17 +81,18 @@ export default function WatchMoviePage() {
         </Link>
       </div>
 
-      {/* Video Player */}
       <div className="w-full h-screen">
         <VideoPlayer
           src={streamUrl}
           title={`${movieInfo.info.name} ${movieInfo.movie_data.container_extension ? `[${movieInfo.movie_data.container_extension.toUpperCase()}]` : ""}`}
           subtitle={`${movieInfo.info.releaseDate || ""} • ${movieInfo.info.duration || ""}`}
           autoPlay
+          sessionId={sessionId}
+          videoType="movie"
+          videoIdentifier={params.id as string}
         />
       </div>
 
-      {/* Movie Details Below Player */}
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl">
           <h1 className="text-3xl font-bold mb-4">{movieInfo.info.name}</h1>

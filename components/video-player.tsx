@@ -4,6 +4,8 @@ import type React from "react"
 
 import { useEffect, useRef, useState } from "react"
 import { Play, Pause, Volume2, VolumeX, Maximize, SkipForward, SkipBack } from "lucide-react"
+import { WatchTogetherButton } from "./watch-together-button"
+import { updateSessionState, getSession } from "@/lib/watch-session"
 
 interface VideoPlayerProps {
   src: string
@@ -15,6 +17,9 @@ interface VideoPlayerProps {
   hasNext?: boolean
   hasPrevious?: boolean
   autoPlay?: boolean
+  sessionId?: string
+  videoType?: "movie" | "series" | "live"
+  videoIdentifier?: string
 }
 
 export function VideoPlayer({
@@ -27,6 +32,9 @@ export function VideoPlayer({
   hasNext,
   hasPrevious,
   autoPlay = false,
+  sessionId,
+  videoType,
+  videoIdentifier,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -40,6 +48,9 @@ export function VideoPlayer({
   const [isHlsReady, setIsHlsReady] = useState(false)
   const controlsTimeoutRef = useRef<NodeJS.Timeout>()
   const hlsRef = useRef<any>(null)
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId)
+  const syncIntervalRef = useRef<NodeJS.Timeout>()
+  const isSyncingRef = useRef(false)
 
   useEffect(() => {
     const video = videoRef.current
@@ -66,10 +77,10 @@ export function VideoPlayer({
             const hls = new Hls({
               enableWorker: true,
               lowLatencyMode: false,
-              backBufferLength: 30, // Reduced from 90 to save memory
+              backBufferLength: 30,
               maxBufferLength: 30,
               maxMaxBufferLength: 60,
-              maxBufferSize: 60 * 1000 * 1000, // 60MB max buffer
+              maxBufferSize: 60 * 1000 * 1000,
               maxBufferHole: 0.5,
               highBufferWatchdogPeriod: 2,
             })
@@ -224,6 +235,63 @@ export function VideoPlayer({
     }
   }, [src, autoPlay, onEnded])
 
+  useEffect(() => {
+    if (!activeSessionId) return
+
+    console.log("[v0] Starting watch together sync for session:", activeSessionId)
+
+    const syncToSession = () => {
+      if (isSyncingRef.current) return
+      updateSessionState(activeSessionId, {
+        currentTime: videoRef.current?.currentTime || 0,
+        isPlaying,
+      })
+    }
+
+    const syncFromSession = () => {
+      if (isSyncingRef.current) return
+
+      const session = getSession(activeSessionId)
+      if (!session) return
+
+      const video = videoRef.current
+      if (!video) return
+
+      if (session.isPlaying !== isPlaying) {
+        isSyncingRef.current = true
+        if (session.isPlaying) {
+          video.play().catch(console.error)
+        } else {
+          video.pause()
+        }
+        setTimeout(() => {
+          isSyncingRef.current = false
+        }, 500)
+      }
+
+      const timeDiff = Math.abs((video.currentTime || 0) - session.currentTime)
+      if (timeDiff > 2) {
+        console.log("[v0] Syncing time difference:", timeDiff)
+        isSyncingRef.current = true
+        video.currentTime = session.currentTime
+        setTimeout(() => {
+          isSyncingRef.current = false
+        }, 500)
+      }
+    }
+
+    syncIntervalRef.current = setInterval(() => {
+      syncToSession()
+      syncFromSession()
+    }, 2000)
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current)
+      }
+    }
+  }, [activeSessionId, isPlaying])
+
   const togglePlay = () => {
     const video = videoRef.current
     if (!video) return
@@ -360,8 +428,25 @@ export function VideoPlayer({
         }`}
       >
         <div className="absolute top-0 left-0 right-0 p-6">
-          <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
-          {subtitle && <p className="text-white/70">{subtitle}</p>}
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
+              {subtitle && <p className="text-white/70">{subtitle}</p>}
+            </div>
+            {videoType && videoIdentifier && !activeSessionId && (
+              <WatchTogetherButton
+                videoUrl={videoIdentifier}
+                videoTitle={title}
+                videoType={videoType}
+                onSessionCreated={(id) => setActiveSessionId(id)}
+              />
+            )}
+            {activeSessionId && (
+              <div className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
+                <p className="text-sm text-white/90">Watching Together</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-6">
