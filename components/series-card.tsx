@@ -1,0 +1,50 @@
+"use client"
+
+import { useState } from "react"
+import type { Series } from "@/types/xtream"
+import { Card, CardContent } from "@/components/ui/card"
+import { Play } from "lucide-react"
+
+interface SeriesCardProps {
+  series: Series
+  onClick: () => void
+}
+
+export function SeriesCard({ series, onClick }: SeriesCardProps) {
+  const [imageError, setImageError] = useState(false)
+
+  return (
+    <Card
+      className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 border-0 bg-card"
+      onClick={onClick}
+    >
+      <CardContent className="p-0">
+        <div className="relative aspect-[2/3] overflow-hidden bg-muted/50 rounded-lg">
+          {series.cover && !imageError ? (
+            <img
+              src={series.cover || "/placeholder.svg"}
+              alt={series.name}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-muted">
+              <Play className="w-12 h-12 text-muted-foreground/30" />
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            <div className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full">
+              <Play className="w-4 h-4 fill-current" />
+              <span className="text-sm font-medium">Watch</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-2">
+          <h3 className="font-medium text-sm line-clamp-2 text-center">{series.name}</h3>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
