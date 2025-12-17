@@ -184,7 +184,10 @@ export default function LivePage() {
                 <div key={category.category_id} className="space-y-4">
                   <h2 className="text-2xl font-semibold">{category.category_name}</h2>
                   <div className="relative">
-                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide will-change-transform">
+                    <div
+                      className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide will-change-scroll"
+                      style={{ contain: "layout style paint" }}
+                    >
                       {visibleStreams.map((stream) => (
                         <LiveChannelCard
                           key={stream.stream_id}

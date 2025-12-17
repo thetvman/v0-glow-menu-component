@@ -22,7 +22,7 @@ export function LiveChannelCard({ channel, onClick }: LiveChannelCardProps) {
 
   return (
     <Card
-      className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl border-0 bg-card/50 backdrop-blur-sm min-w-[140px]"
+      className="group relative overflow-hidden cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-xl border-0 bg-card/50 backdrop-blur-sm min-w-[140px] will-change-transform"
       onClick={onClick}
     >
       <CardContent className="p-0">
@@ -33,7 +33,7 @@ export function LiveChannelCard({ channel, onClick }: LiveChannelCardProps) {
               src={channel.stream_icon || "/placeholder.svg"}
               alt={channel.name}
               loading="lazy"
-              className={`w-full h-full object-contain p-3 transition-all duration-300 group-hover:scale-110 ${
+              className={`w-full h-full object-contain p-3 transition-all duration-200 group-hover:scale-110 ${
                 imageLoaded ? "opacity-100" : "opacity-0"
               }`}
               onError={() => setImageError(true)}
