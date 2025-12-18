@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { VideoPlayer } from "@/components/video-player"
-import { getSession, type WatchSession } from "@/lib/watch-session"
+import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
 import { ArrowLeft, Users } from "lucide-react"
 import Link from "next/link"
 
@@ -19,7 +19,8 @@ export default function WatchGuestPage() {
       try {
         setLoading(true)
         const sessionId = params.sessionId as string
-        const foundSession = await getSession(sessionId)
+        const manager = new WatchTogetherManager()
+        const foundSession = await manager.getSession(sessionId)
 
         if (!foundSession) {
           setError("Session not found or expired")
@@ -36,10 +37,6 @@ export default function WatchGuestPage() {
     }
 
     loadSession()
-
-    // Refresh session data periodically
-    const interval = setInterval(loadSession, 2000)
-    return () => clearInterval(interval)
   }, [params.sessionId])
 
   if (loading) {
@@ -83,7 +80,7 @@ export default function WatchGuestPage() {
           border border-purple-500/30 rounded-lg backdrop-blur-sm"
         >
           <Users className="w-4 h-4 text-purple-400" />
-          <span className="text-sm text-white/90">{session?.participants.length || 0} watching</span>
+          <span className="text-sm text-white/90">{session.participants} watching</span>
         </div>
       </div>
 
@@ -93,8 +90,9 @@ export default function WatchGuestPage() {
           title={session.videoTitle}
           subtitle="Watching Together"
           autoPlay
-          sessionId={session.id}
+          activeSessionId={session.id}
           videoType={session.videoType}
+          videoIdentifier={session.videoId}
         />
       </div>
 
@@ -104,7 +102,7 @@ export default function WatchGuestPage() {
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              <span>{session?.participants.length || 0} viewers</span>
+              <span>{session.participants} viewers</span>
             </div>
             <span>Session Code: {session.code}</span>
             <span>Type: {session.videoType}</span>

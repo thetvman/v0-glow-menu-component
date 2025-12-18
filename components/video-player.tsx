@@ -2,327 +2,235 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState } from "react"
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipForward, SkipBack } from "lucide-react"
-import { WatchTogetherButton } from "./watch-together-button"
-import { updateSessionState, subscribeToSession, unsubscribeFromSession } from "@/lib/watch-session"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import { useEffect, useState, useRef } from "react"
+import Hls from "hls.js"
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
+import { WatchTogetherDialog } from "./watch-together-dialog"
+import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
 
 interface VideoPlayerProps {
   src: string
   title: string
   subtitle?: string
-  onEnded?: () => void
-  onNext?: () => void
-  onPrevious?: () => void
-  hasNext?: boolean
-  hasPrevious?: boolean
-  autoPlay?: boolean
-  sessionId?: string
-  videoType?: "movie" | "series" | "live"
+  onBack?: () => void
+  videoType?: string
   videoIdentifier?: string
-  streamUrl?: string // Added streamUrl prop for guest access
+  streamUrl?: string
+  activeSessionId?: string
+  onSessionStart?: (id: string) => void
 }
 
 export function VideoPlayer({
   src,
   title,
   subtitle,
-  onEnded,
-  onNext,
-  onPrevious,
-  hasNext,
-  hasPrevious,
-  autoPlay = false,
-  sessionId,
   videoType,
   videoIdentifier,
-  streamUrl, // Added streamUrl prop
+  streamUrl,
+  activeSessionId,
+  onSessionStart,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef = useRef<Hls | null>(null)
+  const managerRef = useRef<WatchTogetherManager | null>(null)
+  const syncingRef = useRef(false)
+  const updateTimerRef = useRef<NodeJS.Timeout>()
+
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(true)
-  const [isBuffering, setIsBuffering] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isHlsReady, setIsHlsReady] = useState(false)
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>()
-  const hlsRef = useRef<any>(null)
-  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId)
-  const realtimeChannelRef = useRef<RealtimeChannel | null>(null)
-  const isSyncingRef = useRef(false)
-  const lastUpdateRef = useRef<number>(0)
+  const [participants, setParticipants] = useState(1)
+  const [waitingForGuest, setWaitingForGuest] = useState(false)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    setIsHlsReady(false)
-
-    const loadHLS = async () => {
-      console.log("[v0] Loading video source:", src)
-      setError(null)
-      setIsBuffering(true)
-
+    const loadVideo = () => {
       if (src.includes(".m3u8")) {
-        try {
-          const Hls = (await import("hls.js")).default
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            backBufferLength: 30,
+            maxBufferLength: 30,
+            maxBufferSize: 60 * 1000 * 1000,
+          })
 
-          if (Hls.isSupported()) {
-            console.log("[v0] Using HLS.js for stream playback")
+          hlsRef.current = hls
+          hls.loadSource(src)
+          hls.attachMedia(video)
 
-            if (hlsRef.current) {
-              hlsRef.current.destroy()
-            }
-
-            const hls = new Hls({
-              enableWorker: true,
-              lowLatencyMode: false,
-              backBufferLength: 30,
-              maxBufferLength: 30,
-              maxMaxBufferLength: 60,
-              maxBufferSize: 60 * 1000 * 1000,
-              maxBufferHole: 0.5,
-              highBufferWatchdogPeriod: 2,
-            })
-
-            hlsRef.current = hls
-
-            hls.loadSource(src)
-            hls.attachMedia(video)
-
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              console.log("[v0] HLS manifest parsed successfully")
-              setIsBuffering(false)
-              setIsHlsReady(true)
-
-              if (autoPlay) {
-                setTimeout(() => {
-                  video
-                    .play()
-                    .then(() => {
-                      console.log("[v0] Playback started")
-                      setIsPlaying(true)
-                      setError(null)
-                    })
-                    .catch((err) => {
-                      console.error("[v0] Autoplay failed:", err)
-                      setError("Autoplay was prevented. Click play to start.")
-                      setIsPlaying(false)
-                    })
-                }, 100)
-              }
-            })
-
-            hls.on(Hls.Events.ERROR, (event, data) => {
-              console.error("[v0] HLS error:", data)
-              if (data.fatal) {
-                switch (data.type) {
-                  case Hls.ErrorTypes.NETWORK_ERROR:
-                    console.error("[v0] Fatal network error, trying to recover")
-                    setError("Network error. Retrying...")
-                    hls.startLoad()
-                    break
-                  case Hls.ErrorTypes.MEDIA_ERROR:
-                    console.error("[v0] Fatal media error, trying to recover")
-                    setError("Media error. Retrying...")
-                    hls.recoverMediaError()
-                    break
-                  default:
-                    console.error("[v0] Fatal error, cannot recover")
-                    setError("Failed to load stream. Please try another source.")
-                    hls.destroy()
-                    break
-                }
-              }
-            })
-          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            console.log("[v0] Using native HLS support")
-            video.src = src
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
             setIsBuffering(false)
-            setIsHlsReady(true)
-            if (autoPlay) {
-              video
-                .play()
-                .then(() => {
-                  setIsPlaying(true)
-                  setError(null)
-                })
-                .catch((err) => {
-                  console.error("[v0] Autoplay failed:", err)
-                  setError("Autoplay was prevented. Click play to start.")
-                  setIsPlaying(false)
-                })
+            if (!activeSessionId) {
+              video.play().catch(() => setError("Click play to start"))
             }
-          } else {
-            console.error("[v0] HLS not supported in this browser")
-            setError("HLS streams are not supported in your browser.")
-          }
-        } catch (err) {
-          console.error("[v0] Failed to load HLS.js:", err)
-          setError("Failed to initialize video player.")
+          })
+
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+              setError("Failed to load video")
+            }
+          })
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = src
+          setIsBuffering(false)
         }
       } else {
-        console.log("[v0] Using standard video source")
         video.src = src
         setIsBuffering(false)
-        setIsHlsReady(true)
-        if (autoPlay) {
-          video
-            .play()
-            .then(() => {
-              setIsPlaying(true)
-              setError(null)
-            })
-            .catch((err) => {
-              console.error("[v0] Autoplay failed:", err)
-              setError("Autoplay was prevented. Click play to start.")
-              setIsPlaying(false)
-            })
-        }
       }
     }
 
-    loadHLS()
-
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime)
-    const handleDurationChange = () => setDuration(video.duration)
-    const handleEnded = () => {
-      setIsPlaying(false)
-      onEnded?.()
-    }
-    const handleWaiting = () => setIsBuffering(true)
-    const handleCanPlay = () => setIsBuffering(false)
-    const handlePlay = () => {
-      setIsPlaying(true)
-      setError(null)
-    }
-    const handlePause = () => {
-      setIsPlaying(false)
-    }
-    const handleError = (e: Event) => {
-      console.error("[v0] Video element error:", e)
-      const videoError = video.error
-      if (videoError) {
-        console.error("[v0] Video error code:", videoError.code, "message:", videoError.message)
-        setError(`Video error: ${videoError.message || "Failed to load video"}`)
-      }
-      setIsBuffering(false)
-    }
-
-    video.addEventListener("timeupdate", handleTimeUpdate)
-    video.addEventListener("durationchange", handleDurationChange)
-    video.addEventListener("ended", handleEnded)
-    video.addEventListener("waiting", handleWaiting)
-    video.addEventListener("canplay", handleCanPlay)
-    video.addEventListener("play", handlePlay)
-    video.addEventListener("pause", handlePause)
-    video.addEventListener("error", handleError)
+    loadVideo()
 
     return () => {
-      video.removeEventListener("timeupdate", handleTimeUpdate)
-      video.removeEventListener("durationchange", handleDurationChange)
-      video.removeEventListener("ended", handleEnded)
-      video.removeEventListener("waiting", handleWaiting)
-      video.removeEventListener("canplay", handleCanPlay)
-      video.removeEventListener("play", handlePlay)
-      video.removeEventListener("pause", handlePause)
-      video.removeEventListener("error", handleError)
-
       if (hlsRef.current) {
         hlsRef.current.destroy()
-        hlsRef.current = null
       }
     }
-  }, [src, autoPlay, onEnded])
+  }, [src, activeSessionId])
 
   useEffect(() => {
     if (!activeSessionId) return
 
-    console.log("[v0] Setting up Realtime sync for session:", activeSessionId)
+    const video = videoRef.current
+    if (!video) return
 
-    const channel = subscribeToSession(activeSessionId, (updatedSession) => {
-      if (isSyncingRef.current) return
+    const manager = new WatchTogetherManager()
+    managerRef.current = manager
 
-      const video = videoRef.current
-      if (!video) return
-
-      console.log("[v0] Received session update from other client:", updatedSession)
-
-      if (updatedSession.is_playing !== isPlaying) {
-        isSyncingRef.current = true
-        if (updatedSession.is_playing) {
-          video.play().catch(console.error)
-        } else {
+    // Get initial session state
+    manager.getSession(activeSessionId).then((session) => {
+      if (session) {
+        setParticipants(session.participants)
+        if (session.participants === 1) {
+          setWaitingForGuest(true)
           video.pause()
         }
-        setTimeout(() => {
-          isSyncingRef.current = false
-        }, 500)
-      }
-
-      const timeDiff = Math.abs((video.currentTime || 0) - updatedSession.playback_time)
-      if (timeDiff > 2) {
-        console.log("[v0] Syncing time difference:", timeDiff)
-        isSyncingRef.current = true
-        video.currentTime = updatedSession.playback_time
-        setTimeout(() => {
-          isSyncingRef.current = false
-        }, 500)
       }
     })
 
-    realtimeChannelRef.current = channel
+    // Subscribe to updates
+    manager.subscribe(activeSessionId, (session: WatchSession) => {
+      if (syncingRef.current) return
 
-    const broadcastInterval = setInterval(() => {
-      if (isSyncingRef.current) return
-
-      const now = Date.now()
-      if (now - lastUpdateRef.current < 2000) return
-
-      lastUpdateRef.current = now
-      updateSessionState(activeSessionId, {
-        playback_time: videoRef.current?.currentTime || 0,
-        is_playing: isPlaying,
+      console.log("[v0] 📡 Received sync update:", {
+        participants: session.participants,
+        playbackTime: session.playbackTime.toFixed(2),
+        isPlaying: session.isPlaying,
+        currentVideoTime: video.currentTime.toFixed(2),
+        currentlyPlaying: !video.paused,
       })
-    }, 2000)
+
+      setParticipants(session.participants)
+
+      // Stop waiting when guest joins
+      if (session.participants > 1 && waitingForGuest) {
+        console.log("[v0] Guest joined! Starting playback")
+        setWaitingForGuest(false)
+      }
+
+      syncingRef.current = true
+
+      // Sync playback state
+      if (session.isPlaying && video.paused) {
+        console.log("[v0] ▶️ Starting playback (received play command)")
+        video.play()
+      } else if (!session.isPlaying && !video.paused) {
+        console.log("[v0] ⏸️ Pausing playback (received pause command)")
+        video.pause()
+      }
+
+      // Sync time if off by more than 2 seconds
+      const timeDiff = Math.abs(video.currentTime - session.playbackTime)
+      if (timeDiff > 2) {
+        console.log(
+          "[v0] ⏩ Seeking to:",
+          session.playbackTime.toFixed(2),
+          "(was at:",
+          video.currentTime.toFixed(2),
+          ")",
+        )
+        video.currentTime = session.playbackTime
+      }
+
+      setTimeout(() => {
+        syncingRef.current = false
+      }, 500)
+    })
 
     return () => {
-      clearInterval(broadcastInterval)
-      if (realtimeChannelRef.current) {
-        unsubscribeFromSession(realtimeChannelRef.current)
-        realtimeChannelRef.current = null
-      }
+      manager.unsubscribe()
     }
-  }, [activeSessionId, isPlaying])
+  }, [activeSessionId, waitingForGuest])
+
+  const updateSession = () => {
+    const video = videoRef.current
+    if (!video || !activeSessionId || !managerRef.current || syncingRef.current) return
+
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current)
+    }
+
+    updateTimerRef.current = setTimeout(() => {
+      managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
+    }, 500)
+  }
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
+      updateSession()
+    }
+
+    const handlePlay = () => {
+      setIsPlaying(true)
+      updateSession()
+    }
+
+    const handlePause = () => {
+      setIsPlaying(false)
+      updateSession()
+    }
+
+    const handleDurationChange = () => setDuration(video.duration)
+    const handleWaiting = () => setIsBuffering(true)
+    const handleCanPlay = () => setIsBuffering(false)
+
+    video.addEventListener("timeupdate", handleTimeUpdate)
+    video.addEventListener("play", handlePlay)
+    video.addEventListener("pause", handlePause)
+    video.addEventListener("durationchange", handleDurationChange)
+    video.addEventListener("waiting", handleWaiting)
+    video.addEventListener("canplay", handleCanPlay)
+
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate)
+      video.removeEventListener("play", handlePlay)
+      video.removeEventListener("pause", handlePause)
+      video.removeEventListener("durationchange", handleDurationChange)
+      video.removeEventListener("waiting", handleWaiting)
+      video.removeEventListener("canplay", handleCanPlay)
+    }
+  }, [activeSessionId])
 
   const togglePlay = () => {
     const video = videoRef.current
     if (!video) return
 
-    if (!isHlsReady && src.includes(".m3u8")) {
-      console.log("[v0] HLS not ready yet, waiting...")
-      return
-    }
-
-    if (isPlaying) {
-      video.pause()
-      setIsPlaying(false)
+    if (video.paused) {
+      video.play()
     } else {
-      setError(null)
-      video
-        .play()
-        .then(() => {
-          console.log("[v0] Manual play successful")
-          setIsPlaying(true)
-        })
-        .catch((err) => {
-          console.error("[v0] Manual play failed:", err)
-          setError("Unable to play video. Please try again.")
-        })
+      video.pause()
     }
   }
 
@@ -333,6 +241,7 @@ export function VideoPlayer({
     const time = Number.parseFloat(e.target.value)
     video.currentTime = time
     setCurrentTime(time)
+    updateSession()
   }
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -349,24 +258,8 @@ export function VideoPlayer({
     const video = videoRef.current
     if (!video) return
 
-    if (isMuted) {
-      video.volume = volume
-      setIsMuted(false)
-    } else {
-      video.volume = 0
-      setIsMuted(true)
-    }
-  }
-
-  const toggleFullscreen = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (!document.fullscreenElement) {
-      video.requestFullscreen().catch(console.error)
-    } else {
-      document.exitFullscreen().catch(console.error)
-    }
+    video.volume = isMuted ? volume : 0
+    setIsMuted(!isMuted)
   }
 
   const skip = (seconds: number) => {
@@ -374,6 +267,22 @@ export function VideoPlayer({
     if (!video) return
 
     video.currentTime = Math.max(0, Math.min(duration, currentTime + seconds))
+  }
+
+  const restart = async () => {
+    const video = videoRef.current
+    if (!video || !activeSessionId || !managerRef.current) return
+
+    console.log("[v0] Restarting video for all participants")
+
+    // Reset video locally
+    video.currentTime = 0
+
+    // Update session to restart and play for everyone
+    await managerRef.current.restartSession(activeSessionId)
+
+    // Start playing locally
+    video.play()
   }
 
   const formatTime = (time: number) => {
@@ -387,150 +296,139 @@ export function VideoPlayer({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
 
-  const handleMouseMove = () => {
-    setShowControls(true)
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current)
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false)
-      }
-    }, 3000)
-  }
-
   return (
     <div
-      className="relative w-full h-full bg-black group"
-      onMouseMove={handleMouseMove}
+      className="relative w-full h-full bg-black"
+      onMouseMove={() => setShowControls(true)}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
       <video ref={videoRef} className="w-full h-full" onClick={togglePlay} />
 
-      {error && !isPlaying && (
-        <div
-          className="absolute inset-0 flex items-center justify-center bg-black/80 cursor-pointer"
-          onClick={togglePlay}
-        >
-          <div className="text-center px-6">
-            <p className="text-red-500 text-lg mb-2">Playback Error</p>
-            <p className="text-white/70 mb-4">{error}</p>
-            <button className="px-6 py-3 bg-primary rounded-full text-white font-medium hover:bg-primary/80 transition-colors flex items-center gap-2 mx-auto">
-              <Play className="w-5 h-5" />
+      {/* Error overlay */}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-40">
+          <div className="text-center">
+            <p className="text-white text-lg mb-4">{error}</p>
+            <button
+              onClick={togglePlay}
+              className="px-6 py-3 bg-white text-black rounded-full font-medium hover:bg-white/90"
+            >
               Click to Play
             </button>
           </div>
         </div>
       )}
 
-      {isBuffering && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      {/* Waiting for guest overlay */}
+      {waitingForGuest && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-sm z-40">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin" />
+            <div>
+              <p className="text-white text-xl font-semibold mb-2">Waiting for guests...</p>
+              <p className="text-white/70">Share the session code to start watching together</p>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Buffering spinner */}
+      {isBuffering && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+          <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* Watch together badge and restart button */}
+      {activeSessionId && participants > 1 && (
+        <div className="absolute top-6 right-6 z-50 flex items-center gap-3">
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+            <Users className="w-4 h-4 text-white" />
+            <span className="text-white font-semibold">{participants}</span>
+          </div>
+          <button
+            onClick={restart}
+            className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
+            title="Restart for everyone"
+          >
+            <RotateCcw className="w-5 h-5 text-white" />
+          </button>
+        </div>
+      )}
+
+      {/* Controls */}
       <div
-        className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent transition-opacity ${
           showControls ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="absolute top-0 left-0 right-0 p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
-              {subtitle && <p className="text-white/70">{subtitle}</p>}
-            </div>
-            {videoType && videoIdentifier && streamUrl && !activeSessionId && (
-              <WatchTogetherButton
-                videoUrl={videoIdentifier}
-                videoTitle={title}
-                videoType={videoType}
-                streamUrl={streamUrl}
-                onSessionCreated={(id) => setActiveSessionId(id)}
-              />
-            )}
-            {activeSessionId && (
-              <div className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg backdrop-blur-sm">
-                <p className="text-sm text-white/90">Watching Together</p>
-              </div>
-            )}
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 p-6 flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
+            {subtitle && <p className="text-white/80">{subtitle}</p>}
           </div>
+          {videoType && videoIdentifier && streamUrl && !activeSessionId && (
+            <WatchTogetherDialog
+              videoType={videoType}
+              videoId={videoIdentifier}
+              videoTitle={title}
+              streamUrl={streamUrl}
+              onSessionStart={(id) => onSessionStart?.(id)}
+            />
+          )}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6">
-          <div className="mb-4">
+        {/* Bottom controls */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 space-y-4">
+          {/* Progress bar */}
+          <div>
             <input
               type="range"
               min="0"
               max={duration || 0}
               value={currentTime}
               onChange={handleSeek}
-              className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer
+              className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer
                 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary 
-                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(168,85,247,0.6)]
-                [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full 
-                [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white
+                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg"
             />
-            <div className="flex justify-between text-sm text-white/70 mt-1">
+            <div className="flex justify-between text-sm text-white/70 mt-2">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
 
+          {/* Control buttons */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {/* Play/Pause */}
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-primary/20 backdrop-blur-sm flex items-center justify-center
-                  hover:bg-primary/30 transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]"
+                className="w-12 h-12 rounded-full bg-white flex items-center justify-center hover:scale-110 transition-transform"
               >
-                {isPlaying ? (
-                  <Pause className="w-6 h-6 text-white fill-white" />
-                ) : (
-                  <Play className="w-6 h-6 text-white fill-white ml-1" />
-                )}
+                {isPlaying ? <Pause className="w-6 h-6 text-black" /> : <Play className="w-6 h-6 text-black ml-0.5" />}
               </button>
 
+              {/* Skip buttons */}
               <button
                 onClick={() => skip(-10)}
-                className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center
-                  hover:bg-white/20 transition-all"
+                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
               >
                 <SkipBack className="w-5 h-5 text-white" />
               </button>
-
               <button
                 onClick={() => skip(10)}
-                className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center
-                  hover:bg-white/20 transition-all"
+                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
               >
                 <SkipForward className="w-5 h-5 text-white" />
               </button>
 
-              {hasPrevious && (
-                <button
-                  onClick={onPrevious}
-                  className="px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white text-sm
-                    hover:bg-white/20 transition-all"
-                >
-                  Previous Episode
-                </button>
-              )}
-
-              {hasNext && (
-                <button
-                  onClick={onNext}
-                  className="px-4 py-2 rounded-full bg-primary/20 backdrop-blur-sm text-white text-sm
-                    hover:bg-primary/30 transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]"
-                >
-                  Next Episode
-                </button>
-              )}
-
+              {/* Volume */}
               <div className="flex items-center gap-2">
-                <button onClick={toggleMute} className="text-white hover:text-primary transition-colors">
-                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                <button onClick={toggleMute} className="p-2">
+                  {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
                 </button>
                 <input
                   type="range"
@@ -539,18 +437,17 @@ export function VideoPlayer({
                   step="0.1"
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer
+                  className="w-24 h-1 bg-white/20 rounded-full appearance-none cursor-pointer
                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white 
-                    [&::-webkit-slider-thumb]:cursor-pointer"
+                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
                 />
               </div>
             </div>
 
+            {/* Fullscreen */}
             <button
-              onClick={toggleFullscreen}
-              className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center
-                hover:bg-white/20 transition-all"
+              onClick={() => videoRef.current?.requestFullscreen()}
+              className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
             >
               <Maximize className="w-5 h-5 text-white" />
             </button>

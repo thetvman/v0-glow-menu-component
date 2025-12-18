@@ -4,8 +4,8 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Users, ArrowRight, Loader2, CheckCircle } from "lucide-react"
-import { joinWatchSession } from "@/lib/watch-session"
+import { Users, ArrowRight, Loader2, AlertCircle } from "lucide-react"
+import { WatchTogetherManager } from "@/lib/watch-together"
 
 function ScreenshareContent() {
   const router = useRouter()
@@ -15,7 +15,6 @@ function ScreenshareContent() {
   const [isJoining, setIsJoining] = useState(false)
 
   useEffect(() => {
-    // Auto-join if code is in URL
     const urlCode = searchParams.get("code")
     if (urlCode && urlCode.length === 6) {
       handleJoin(urlCode)
@@ -40,17 +39,24 @@ function ScreenshareContent() {
 
     console.log("[v0] Joining session with code:", sessionCode)
 
-    const session = await joinWatchSession(sessionCode)
+    try {
+      const manager = new WatchTogetherManager()
+      const session = await manager.joinSession(sessionCode)
 
-    if (!session) {
-      setError("Session not found. Make sure the host created the session and you're using the correct code.")
+      if (!session) {
+        setError("Session not found. Please check the code and try again.")
+        setIsJoining(false)
+        console.log("[v0] Failed to join - session not found")
+        return
+      }
+
+      console.log("[v0] Successfully joined session, redirecting...")
+      router.push(`/watch-guest/${session.id}`)
+    } catch (error) {
+      console.error("[v0] Error joining session:", error)
+      setError("Failed to join session. Please try again.")
       setIsJoining(false)
-      console.log("[v0] Failed to join - session not found")
-      return
     }
-
-    console.log("[v0] Successfully joined session, redirecting...")
-    router.push(`/watch-guest/${session.id}`)
   }
 
   return (
@@ -70,11 +76,11 @@ function ScreenshareContent() {
         </div>
 
         <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 flex gap-3">
-          <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-sm font-medium text-green-500">Cross-Device Syncing Enabled</p>
+            <p className="text-sm font-medium text-green-500">Cross-Device Ready</p>
             <p className="text-xs text-muted-foreground">
-              Watch together from any device on any network with real-time Supabase sync
+              Watch together from any device! Real-time sync powered by Supabase.
             </p>
           </div>
         </div>
