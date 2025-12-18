@@ -4,12 +4,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "deploy": "bash deploy.sh",
     "dev": "next dev",
     "lint": "eslint .",
-    "serve": "bash start.sh",
-    "start": "next start",
-    "stop": "bash stop.sh"
+    "start": "next start"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

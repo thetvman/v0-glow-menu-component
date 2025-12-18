@@ -93,6 +93,7 @@ export default function WatchGuestPage() {
           activeSessionId={session.id}
           videoType={session.videoType}
           videoIdentifier={session.videoId}
+          isHost={false}
         />
       </div>
 
