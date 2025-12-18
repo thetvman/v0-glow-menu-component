@@ -18,13 +18,6 @@ export default function WatchLivePage() {
   const [error, setError] = useState("")
   const sessionId = searchParams.get("session") || undefined
 
-  const handleSessionCreated = (newSessionId: string) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set("session", newSessionId)
-    window.history.pushState({}, "", url.toString())
-    router.push(`/watch/live/${params.id}?session=${newSessionId}`)
-  }
-
   useEffect(() => {
     if (!isConnected || !api) {
       router.push("/login")
@@ -95,11 +88,9 @@ export default function WatchLivePage() {
           title={channelName}
           subtitle="Live TV"
           autoPlay
-          activeSessionId={sessionId}
+          sessionId={sessionId}
           videoType="live"
           videoIdentifier={params.id as string}
-          streamUrl={streamUrl}
-          onSessionStart={handleSessionCreated}
         />
       </div>
     </div>

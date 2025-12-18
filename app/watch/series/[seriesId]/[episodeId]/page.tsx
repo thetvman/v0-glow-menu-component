@@ -24,13 +24,6 @@ export default function WatchSeriesPage() {
   const seriesId = Number.parseInt(params.seriesId as string)
   const episodeId = params.episodeId as string
 
-  const handleSessionCreated = (newSessionId: string) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set("session", newSessionId)
-    window.history.pushState({}, "", url.toString())
-    router.push(`/watch/series/${seriesId}/${episodeId}?session=${newSessionId}`)
-  }
-
   useEffect(() => {
     if (!isConnected || !api) {
       router.push("/login")
@@ -176,11 +169,10 @@ export default function WatchSeriesPage() {
           hasNext={!!getNextEpisode()}
           hasPrevious={!!getPreviousEpisode()}
           autoPlay
-          activeSessionId={sessionId} // Fixed prop name from sessionId to activeSessionId
+          sessionId={sessionId}
           videoType="series"
           videoIdentifier={`${seriesId}/${episodeId}`}
-          streamUrl={streamUrl}
-          onSessionStart={handleSessionCreated}
+          streamUrl={streamUrl} // Added streamUrl prop for watch together button to appear
         />
       </div>
 
