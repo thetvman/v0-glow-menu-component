@@ -87,10 +87,10 @@ export default function WatchMoviePage() {
           title={`${movieInfo.info.name} ${movieInfo.movie_data.container_extension ? `[${movieInfo.movie_data.container_extension.toUpperCase()}]` : ""}`}
           subtitle={`${movieInfo.info.releaseDate || ""} • ${movieInfo.info.duration || ""}`}
           autoPlay
-          sessionId={sessionId}
+          activeSessionId={sessionId} // Fixed prop name from sessionId to activeSessionId
           videoType="movie"
           videoIdentifier={params.id as string}
-          streamUrl={streamUrl} // Pass streamUrl for guest access
+          streamUrl={streamUrl}
         />
       </div>
 

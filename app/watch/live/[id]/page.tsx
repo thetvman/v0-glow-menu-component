@@ -88,9 +88,10 @@ export default function WatchLivePage() {
           title={channelName}
           subtitle="Live TV"
           autoPlay
-          sessionId={sessionId}
+          activeSessionId={sessionId} // Fixed prop name from sessionId to activeSessionId
           videoType="live"
           videoIdentifier={params.id as string}
+          streamUrl={streamUrl} // Added streamUrl prop for watch together button
         />
       </div>
     </div>

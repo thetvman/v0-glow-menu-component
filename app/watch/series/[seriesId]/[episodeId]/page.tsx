@@ -169,10 +169,10 @@ export default function WatchSeriesPage() {
           hasNext={!!getNextEpisode()}
           hasPrevious={!!getPreviousEpisode()}
           autoPlay
-          sessionId={sessionId}
+          activeSessionId={sessionId} // Fixed prop name from sessionId to activeSessionId
           videoType="series"
           videoIdentifier={`${seriesId}/${episodeId}`}
-          streamUrl={streamUrl} // Added streamUrl prop for watch together button to appear
+          streamUrl={streamUrl}
         />
       </div>
 
