@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { WatchSessionManager } from "@/lib/watch-session-supabase"
+import { createWatchSession } from "@/lib/watch-session"
 
 interface WatchTogetherButtonProps {
   videoUrl: string
@@ -23,27 +23,27 @@ export function WatchTogetherButton({
 }: WatchTogetherButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [sessionCode, setSessionCode] = useState<string>("")
+  const [sessionId, setSessionId] = useState<string>("")
   const [copied, setCopied] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
 
   const handleCreateSession = async () => {
-    console.log("[v0] Creating watch session...")
     setIsCreating(true)
+    console.log("[v0] Creating watch session...")
 
-    try {
-      const manager = new WatchSessionManager()
-      const { code, sessionId } = await manager.createSession(videoType, videoUrl, streamUrl, videoTitle)
+    const session = await createWatchSession(videoUrl, videoTitle, videoType, streamUrl)
 
-      console.log("[v0] Session created:", sessionId, "Code:", code)
-      setSessionCode(code)
+    if (session) {
+      console.log("[v0] Session created:", session.id, "Code:", session.code)
+      setSessionCode(session.code)
+      setSessionId(session.id)
       setIsOpen(true)
-      onSessionCreated?.(sessionId, code)
-    } catch (error) {
-      console.error("[v0] Failed to create session:", error)
-      alert("Failed to create watch session. Please try again.")
-    } finally {
-      setIsCreating(false)
+      onSessionCreated?.(session.id, session.code)
+    } else {
+      console.error("[v0] Failed to create session")
     }
+
+    setIsCreating(false)
   }
 
   const handleCopyCode = () => {
@@ -66,9 +66,9 @@ export function WatchTogetherButton({
         variant="ghost"
         size="icon"
         onClick={handleCreateSession}
-        disabled={isCreating}
         className="hover:bg-white/20"
         title="Watch Together"
+        disabled={isCreating}
       >
         <Share2 className="h-5 w-5" />
       </Button>
@@ -110,7 +110,6 @@ export function WatchTogetherButton({
               <p className="text-xs text-muted-foreground">✓ Automatically syncs play, pause, and seek</p>
               <p className="text-xs text-muted-foreground">✓ Session expires after 24 hours</p>
               <p className="text-xs text-muted-foreground">✓ Guests can join without IPTV login</p>
-              <p className="text-xs text-green-500 font-medium">✓ Works across all devices with Supabase Realtime</p>
             </div>
           </div>
         </DialogContent>
