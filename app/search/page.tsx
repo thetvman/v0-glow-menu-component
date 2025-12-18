@@ -10,7 +10,6 @@ import { LiveChannelCard } from "@/components/live-channel-card"
 import { Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SeriesEpisodeSelector } from "@/components/series-episode-selector" // Import SeriesEpisodeSelector component
 import type { VodStream, Series, LiveStream } from "@/lib/xtream-api"
 
 export default function SearchPage() {
@@ -27,9 +26,6 @@ export default function SearchPage() {
   const [allMovies, setAllMovies] = useState<VodStream[]>([])
   const [allSeries, setAllSeries] = useState<Series[]>([])
   const [allLive, setAllLive] = useState<LiveStream[]>([])
-
-  const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null)
-  const [showEpisodeSelector, setShowEpisodeSelector] = useState(false)
 
   useEffect(() => {
     if (!isConnected || !api) {
@@ -101,19 +97,6 @@ export default function SearchPage() {
   const totalResults = movieResults.length + seriesResults.length + liveResults.length
   const hasSearched = searchQuery.trim().length > 0
 
-  const handleMovieClick = (movie: VodStream) => {
-    router.push(`/watch/movie/${movie.stream_id}`)
-  }
-
-  const handleSeriesClick = (series: Series) => {
-    setSelectedSeriesId(series.series_id)
-    setShowEpisodeSelector(true)
-  }
-
-  const handleLiveClick = (channel: LiveStream) => {
-    router.push(`/watch/live/${channel.stream_id}`)
-  }
-
   return (
     <div className="min-h-screen bg-background pb-8">
       <div className="max-w-7xl mx-auto px-4 pt-8">
@@ -168,7 +151,11 @@ export default function SearchPage() {
                   <h2 className="text-2xl font-bold mb-4">Movies</h2>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                     {movieResults.slice(0, 16).map((movie) => (
-                      <MovieCard key={movie.stream_id} movie={movie} onClick={() => handleMovieClick(movie)} />
+                      <MovieCard
+                        key={movie.stream_id}
+                        movie={movie}
+                        onClick={() => console.log("Play movie:", movie.name)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -179,7 +166,11 @@ export default function SearchPage() {
                   <h2 className="text-2xl font-bold mb-4">Series</h2>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                     {seriesResults.slice(0, 16).map((series) => (
-                      <SeriesCard key={series.series_id} series={series} onClick={() => handleSeriesClick(series)} />
+                      <SeriesCard
+                        key={series.series_id}
+                        series={series}
+                        onClick={() => console.log("Watch series:", series.name)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -193,7 +184,7 @@ export default function SearchPage() {
                       <LiveChannelCard
                         key={channel.stream_id}
                         channel={channel}
-                        onClick={() => handleLiveClick(channel)}
+                        onClick={() => console.log("Watch live:", channel.name)}
                       />
                     ))}
                   </div>
@@ -204,7 +195,11 @@ export default function SearchPage() {
             <TabsContent value="movies">
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                 {movieResults.map((movie) => (
-                  <MovieCard key={movie.stream_id} movie={movie} onClick={() => handleMovieClick(movie)} />
+                  <MovieCard
+                    key={movie.stream_id}
+                    movie={movie}
+                    onClick={() => console.log("Play movie:", movie.name)}
+                  />
                 ))}
               </div>
             </TabsContent>
@@ -212,7 +207,11 @@ export default function SearchPage() {
             <TabsContent value="series">
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                 {seriesResults.map((series) => (
-                  <SeriesCard key={series.series_id} series={series} onClick={() => handleSeriesClick(series)} />
+                  <SeriesCard
+                    key={series.series_id}
+                    series={series}
+                    onClick={() => console.log("Watch series:", series.name)}
+                  />
                 ))}
               </div>
             </TabsContent>
@@ -220,24 +219,17 @@ export default function SearchPage() {
             <TabsContent value="live">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {liveResults.map((channel) => (
-                  <LiveChannelCard key={channel.stream_id} channel={channel} onClick={() => handleLiveClick(channel)} />
+                  <LiveChannelCard
+                    key={channel.stream_id}
+                    channel={channel}
+                    onClick={() => console.log("Watch live:", channel.name)}
+                  />
                 ))}
               </div>
             </TabsContent>
           </Tabs>
         )}
       </div>
-
-      {selectedSeriesId && (
-        <SeriesEpisodeSelector
-          seriesId={selectedSeriesId}
-          open={showEpisodeSelector}
-          onClose={() => {
-            setShowEpisodeSelector(false)
-            setSelectedSeriesId(null)
-          }}
-        />
-      )}
     </div>
   )
 }

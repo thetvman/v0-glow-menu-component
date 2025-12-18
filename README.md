@@ -117,183 +117,21 @@ The watch together feature allows users to share streaming sessions:
 
 **Live URL:** [https://vercel.com/ffrgtrf1-6953s-projects/v0-glow-menu-component-y8](https://vercel.com/ffrgtrf1-6953s-projects/v0-glow-menu-component-y8)
 
-### Deploy to Dedicated Server (Port 8082)
+### Manual Deployment
 
-To deploy on your own server (VPS, dedicated server, etc.) on port 8082:
+If deploying manually to Vercel:
 
-#### Step 1: Build the Application
-
-```bash
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
-```
-
-#### Step 2: Configure Environment Variables
-
-Create a `.env.production` file in the project root:
-
-```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key-here
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
-
-# Server Configuration
-PORT=8082
-NODE_ENV=production
-```
-
-#### Step 3: Start the Production Server
-
-```bash
-# Option 1: Using npm (simple)
-PORT=8082 npm start
-
-# Option 2: Using PM2 (recommended for production)
-npm install -g pm2
-pm2 start npm --name "iptv-app" -- start -- -p 8082
-
-# Option 3: Using systemd service (most reliable)
-# See below for systemd setup
-```
-
-#### Step 4: Access Your Application
-
-Your app will be available at:
-```
-http://your-server-ip:8082
-```
-
-#### Production Setup with PM2 (Recommended)
-
-PM2 keeps your app running and restarts it if it crashes:
-
-```bash
-# Install PM2 globally
-npm install -g pm2
-
-# Start the app
-PORT=8082 pm2 start npm --name "iptv-streaming" -- start
-
-# Configure PM2 to start on system boot
-pm2 startup
-pm2 save
-
-# View logs
-pm2 logs iptv-streaming
-
-# Monitor the app
-pm2 monit
-
-# Restart the app
-pm2 restart iptv-streaming
-
-# Stop the app
-pm2 stop iptv-streaming
-```
-
-#### Production Setup with systemd
-
-Create a systemd service file for automatic startup:
-
-```bash
-sudo nano /etc/systemd/system/iptv-app.service
-```
-
-Add this configuration:
-
-```ini
-[Unit]
-Description=IPTV Streaming App
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/path/to/v0-glow-menu-component
-Environment=NODE_ENV=production
-Environment=PORT=8082
-ExecStart=/usr/bin/npm start
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start the service:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable iptv-app
-sudo systemctl start iptv-app
-
-# Check status
-sudo systemctl status iptv-app
-
-# View logs
-sudo journalctl -u iptv-app -f
-```
-
-#### Reverse Proxy Setup (Optional - Recommended)
-
-Use Nginx to proxy port 8082 and add SSL:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:8082;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Then enable SSL with Let's Encrypt:
-
-```bash
-sudo certbot --nginx -d your-domain.com
-```
-
-#### Firewall Configuration
-
-Make sure port 8082 is open:
-
-```bash
-# UFW (Ubuntu/Debian)
-sudo ufw allow 8082/tcp
-
-# Firewalld (CentOS/RHEL)
-sudo firewall-cmd --permanent --add-port=8082/tcp
-sudo firewall-cmd --reload
-
-# iptables
-sudo iptables -A INPUT -p tcp --dport 8082 -j ACCEPT
-```
-
-#### Server Requirements
-
-Minimum recommended specs:
-- **CPU:** 2 cores
-- **RAM:** 2GB
-- **Storage:** 10GB
-- **OS:** Ubuntu 20.04+ or similar Linux distribution
-- **Node.js:** 18.x or higher
+1. Push to GitHub
+2. Import to Vercel from dashboard
+3. Add Supabase integration from Vercel's marketplace, OR manually add these environment variables:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   SUPABASE_URL
+   SUPABASE_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY
+   ```
+4. Deploy!
 
 ## Testing on Other Devices
 

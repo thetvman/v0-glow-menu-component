@@ -19,11 +19,17 @@ export default function WatchSeriesPage() {
   const [error, setError] = useState("")
   const [currentSeason, setCurrentSeason] = useState(1)
   const [currentEpisode, setCurrentEpisode] = useState(1)
-  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(searchParams.get("session") || undefined)
-  const [sessionCode, setSessionCode] = useState<string | undefined>(undefined)
+  const sessionId = searchParams.get("session") || undefined
 
   const seriesId = Number.parseInt(params.seriesId as string)
   const episodeId = params.episodeId as string
+
+  const handleSessionCreated = (newSessionId: string) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set("session", newSessionId)
+    window.history.pushState({}, "", url.toString())
+    router.push(`/watch/series/${seriesId}/${episodeId}?session=${newSessionId}`)
+  }
 
   useEffect(() => {
     if (!isConnected || !api) {
@@ -106,8 +112,8 @@ export default function WatchSeriesPage() {
   const handleNext = () => {
     const next = getNextEpisode()
     if (next) {
-      const url = activeSessionId
-        ? `/watch/series/${seriesId}/${next.id}?session=${activeSessionId}${sessionCode ? `&code=${sessionCode}` : ""}`
+      const url = sessionId
+        ? `/watch/series/${seriesId}/${next.id}?session=${sessionId}`
         : `/watch/series/${seriesId}/${next.id}`
       router.push(url)
     }
@@ -116,8 +122,8 @@ export default function WatchSeriesPage() {
   const handlePrevious = () => {
     const prev = getPreviousEpisode()
     if (prev) {
-      const url = activeSessionId
-        ? `/watch/series/${seriesId}/${prev.id}?session=${activeSessionId}${sessionCode ? `&code=${sessionCode}` : ""}`
+      const url = sessionId
+        ? `/watch/series/${seriesId}/${prev.id}?session=${sessionId}`
         : `/watch/series/${seriesId}/${prev.id}`
       router.push(url)
     }
@@ -170,15 +176,11 @@ export default function WatchSeriesPage() {
           hasNext={!!getNextEpisode()}
           hasPrevious={!!getPreviousEpisode()}
           autoPlay
-          activeSessionId={activeSessionId}
-          sessionCode={sessionCode}
-          onSessionStart={(id, code) => {
-            setActiveSessionId(id)
-            setSessionCode(code)
-          }}
+          activeSessionId={sessionId} // Fixed prop name from sessionId to activeSessionId
           videoType="series"
           videoIdentifier={`${seriesId}/${episodeId}`}
           streamUrl={streamUrl}
+          onSessionStart={handleSessionCreated}
         />
       </div>
 
@@ -205,8 +207,8 @@ export default function WatchSeriesPage() {
                         <Link
                           key={ep.id}
                           href={
-                            activeSessionId
-                              ? `/watch/series/${seriesId}/${ep.id}?session=${activeSessionId}${sessionCode ? `&code=${sessionCode}` : ""}`
+                            sessionId
+                              ? `/watch/series/${seriesId}/${ep.id}?session=${sessionId}`
                               : `/watch/series/${seriesId}/${ep.id}`
                           }
                           className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${
