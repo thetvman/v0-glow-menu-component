@@ -4,12 +4,12 @@ import { useState } from "react"
 import { Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { WatchSessionManager } from "@/lib/watch-session-supabase"
+import { WatchTogetherManager } from "@/lib/watch-together"
 
 interface WatchTogetherButtonProps {
   videoUrl: string
   videoTitle: string
-  videoType: "movie" | "series" | "live"
+  videoType: string
   streamUrl: string
   onSessionCreated?: (sessionId: string, code: string) => void
 }
@@ -31,13 +31,17 @@ export function WatchTogetherButton({
     setIsCreating(true)
 
     try {
-      const manager = new WatchSessionManager()
-      const { code, sessionId } = await manager.createSession(videoType, videoUrl, streamUrl, videoTitle)
+      const manager = new WatchTogetherManager()
+      const result = await manager.createSession(videoType, videoUrl, videoTitle, streamUrl)
 
-      console.log("[v0] Session created:", sessionId, "Code:", code)
-      setSessionCode(code)
+      if (!result) {
+        throw new Error("Failed to create session")
+      }
+
+      console.log("[v0] Session created:", result.sessionId, "Code:", result.code)
+      setSessionCode(result.code)
       setIsOpen(true)
-      onSessionCreated?.(sessionId, code)
+      onSessionCreated?.(result.sessionId, result.code)
     } catch (error) {
       console.error("[v0] Failed to create session:", error)
       alert("Failed to create watch session. Please try again.")
