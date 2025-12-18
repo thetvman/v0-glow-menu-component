@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useRef, useState } from "react"
-import { Send, MessageCircle, X } from "lucide-react"
+import { Send, MessageCircle, X, User } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface ChatMessage {
@@ -23,27 +23,21 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [username, setUsername] = useState<string>("")
+  const [showUsernamePrompt, setShowUsernamePrompt] = useState(false)
+  const [tempUsername, setTempUsername] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
-    // Load username from localStorage or generate one
     const storedUsername = localStorage.getItem("watch-together-username")
     if (storedUsername) {
       setUsername(storedUsername)
-    } else {
-      const randomName = `Guest${Math.floor(Math.random() * 9999)
-        .toString()
-        .padStart(4, "0")}`
-      setUsername(randomName)
-      localStorage.setItem("watch-together-username", randomName)
     }
   }, [])
 
   useEffect(() => {
-    // Load initial messages
     const loadMessages = async () => {
       const { data, error } = await supabase
         .from("chat_messages")
@@ -62,7 +56,6 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
 
     loadMessages()
 
-    // Subscribe to new messages
     const channel = supabase
       .channel(`chat:${sessionId}`)
       .on(
@@ -78,7 +71,6 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
           console.log("[v0] 💬 New chat message received:", newMsg)
           setMessages((prev) => [...prev, newMsg])
 
-          // Increment unread count if chat is closed and message is from someone else
           if (!isOpen && newMsg.device_id !== deviceId) {
             setUnreadCount((prev) => prev + 1)
           }
@@ -92,14 +84,12 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
   }, [sessionId, deviceId, supabase, isOpen])
 
   useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages, isOpen])
 
   useEffect(() => {
-    // Clear unread count when chat is opened
     if (isOpen) {
       setUnreadCount(0)
     }
@@ -108,10 +98,15 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
   const sendMessage = async () => {
     if (!newMessage.trim()) return
 
+    if (!username) {
+      setShowUsernamePrompt(true)
+      return
+    }
+
     const { error } = await supabase.from("chat_messages").insert({
       session_id: sessionId,
       device_id: deviceId,
-      username: username || "Guest",
+      username: username,
       message: newMessage.trim(),
     })
 
@@ -121,6 +116,19 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
     }
 
     setNewMessage("")
+  }
+
+  const saveUsername = () => {
+    const trimmedName = tempUsername.trim()
+    if (!trimmedName) return
+
+    setUsername(trimmedName)
+    localStorage.setItem("watch-together-username", trimmedName)
+    setShowUsernamePrompt(false)
+
+    if (newMessage.trim()) {
+      sendMessage()
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -141,7 +149,7 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-50 p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full shadow-lg hover:scale-110 transition-transform"
+        className="fixed bottom-24 right-6 z-50 p-4 bg-gradient-to-r from-zinc-700 to-zinc-800 rounded-full shadow-lg hover:scale-110 transition-transform"
       >
         <MessageCircle className="w-6 h-6 text-white" />
         {unreadCount > 0 && (
@@ -158,13 +166,53 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-purple-400" />
+          <MessageCircle className="w-5 h-5 text-zinc-400" />
           <h3 className="text-white font-semibold">Watch Together Chat</h3>
         </div>
         <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
           <X className="w-5 h-5 text-white/70" />
         </button>
       </div>
+
+      {showUsernamePrompt && (
+        <div className="absolute inset-0 bg-black/90 backdrop-blur-sm rounded-2xl flex items-center justify-center z-10 p-6">
+          <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <User className="w-5 h-5 text-zinc-400" />
+              <h4 className="text-white font-semibold">Choose Your Display Name</h4>
+            </div>
+            <input
+              type="text"
+              value={tempUsername}
+              onChange={(e) => setTempUsername(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  saveUsername()
+                }
+              }}
+              placeholder="Enter your name..."
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 mb-4"
+              maxLength={20}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowUsernamePrompt(false)}
+                className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white/70 hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveUsername}
+                disabled={!tempUsername.trim()}
+                className="flex-1 px-4 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -175,7 +223,7 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
             <div key={msg.id} className={`flex flex-col ${msg.device_id === deviceId ? "items-end" : "items-start"}`}>
               <div className="flex items-baseline gap-2 mb-1">
                 <span
-                  className={`text-xs font-medium ${msg.device_id === deviceId ? "text-purple-400" : "text-pink-400"}`}
+                  className={`text-xs font-medium ${msg.device_id === deviceId ? "text-zinc-300" : "text-zinc-400"}`}
                 >
                   {msg.username || "Guest"}
                 </span>
@@ -183,9 +231,7 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
               </div>
               <div
                 className={`px-3 py-2 rounded-2xl max-w-[80%] break-words ${
-                  msg.device_id === deviceId
-                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                    : "bg-white/10 text-white"
+                  msg.device_id === deviceId ? "bg-white text-black" : "bg-white/10 text-white"
                 }`}
               >
                 {msg.message}
@@ -198,22 +244,38 @@ export function WatchTogetherChat({ sessionId, deviceId }: WatchTogetherChatProp
 
       {/* Input */}
       <div className="p-4 border-t border-white/10">
+        {username && (
+          <div className="flex items-center justify-between mb-2 text-xs text-white/50">
+            <span>
+              Chatting as: <span className="text-white/70 font-medium">{username}</span>
+            </span>
+            <button
+              onClick={() => {
+                setTempUsername(username)
+                setShowUsernamePrompt(true)
+              }}
+              className="text-zinc-400 hover:text-white transition-colors"
+            >
+              Change
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+            placeholder={username ? "Type a message..." : "Set your name to chat..."}
+            className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-zinc-500/50 resize-none"
             maxLength={500}
           />
           <button
             onClick={sendMessage}
             disabled={!newMessage.trim()}
-            className="p-2.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2.5 bg-white text-black rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="w-5 h-5 text-white" />
+            <Send className="w-5 h-5" />
           </button>
         </div>
       </div>
