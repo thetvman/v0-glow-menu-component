@@ -386,22 +386,29 @@ export function VideoPlayer({
 
       {waitingForGuest && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-sm z-40">
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-6 px-4">
             <div className="w-16 h-16 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin" />
-            <div className="space-y-4">
-              <p className="text-white text-xl font-semibold">Waiting for guests...</p>
-              {activeSessionId && (
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 max-w-md mx-auto border border-white/20">
-                  <p className="text-white/70 text-sm mb-3">Share this code:</p>
-                  <div className="bg-white/5 rounded-xl p-4 mb-4">
-                    <p className="text-white text-3xl font-bold tracking-wider font-mono">{activeSessionId}</p>
+            <div className="space-y-6">
+              <p className="text-white text-2xl font-semibold">Waiting for guests to join...</p>
+              {activeSessionId ? (
+                <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-md rounded-3xl p-8 max-w-md mx-auto border-2 border-white/30 shadow-2xl">
+                  <p className="text-white/90 text-base mb-4 font-medium">Share this code with your friends:</p>
+                  <div className="bg-black/40 rounded-2xl p-8 mb-6 border-2 border-white/20 shadow-inner">
+                    <p className="text-white text-6xl font-black tracking-[0.5em] font-mono select-all drop-shadow-lg">
+                      {activeSessionId}
+                    </p>
                   </div>
-                  <p className="text-white/60 text-xs">
-                    Or share the link: {window.location.origin}/watch-guest/{activeSessionId}
-                  </p>
+                  <div className="pt-4 border-t border-white/10">
+                    <p className="text-white/50 text-xs mb-2">Or share this link:</p>
+                    <p className="text-blue-300 text-xs font-mono break-all select-all px-3 py-2 bg-black/30 rounded-lg">
+                      {typeof window !== "undefined" && `${window.location.origin}/watch-guest/${activeSessionId}`}
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <p className="text-white/60 text-sm">Creating session...</p>
               )}
-              <p className="text-white/50 text-sm">The video will start when someone joins</p>
+              <p className="text-white/50 text-sm">The video will start automatically when someone joins</p>
             </div>
           </div>
         </div>
