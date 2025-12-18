@@ -342,12 +342,14 @@ export function VideoPlayer({
       )}
 
       {/* Watch together badge and restart button */}
-      {activeSessionId && participants > 1 && (
+      {activeSessionId && (
         <div className="absolute top-6 right-6 z-50 flex items-center gap-3">
-          <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
-            <Users className="w-4 h-4 text-white" />
-            <span className="text-white font-semibold">{participants}</span>
-          </div>
+          {participants > 1 && (
+            <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+              <Users className="w-4 h-4 text-white" />
+              <span className="text-white font-semibold">{participants}</span>
+            </div>
+          )}
           {isHost && (
             <button
               onClick={restart}
