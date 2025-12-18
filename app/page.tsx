@@ -126,11 +126,9 @@ export default function Page() {
         <div className="mb-12 flex flex-col items-center justify-center min-h-[40vh]">
           <div className="mb-8 text-center">
             <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-500 via-purple-500 to-red-500 bg-clip-text text-transparent">
-              IPTV Player
+              amri's network
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Discover thousands of movies, series, and live channels
-            </p>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">amri's movie & series library</p>
           </div>
 
           <MenuBar />

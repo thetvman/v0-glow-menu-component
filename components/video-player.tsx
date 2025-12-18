@@ -6,6 +6,7 @@ import Hls from "hls.js"
 import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
 import { WatchTogetherDialog } from "./watch-together-dialog"
 import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
+import { WatchTogetherChat } from "./watch-together-chat"
 
 interface VideoPlayerProps {
   src: string
@@ -39,6 +40,15 @@ export function VideoPlayer({
   const syncingFromRemoteRef = useRef(false)
   const lastUpdateTimeRef = useRef(0)
   const updateTimerRef = useRef<NodeJS.Timeout>()
+  const [deviceId] = useState(() => {
+    if (typeof window === "undefined") return ""
+    let id = localStorage.getItem("device-id")
+    if (!id) {
+      id = Math.random().toString(36).substring(2, 8)
+      localStorage.setItem("device-id", id)
+    }
+    return id
+  })
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -453,6 +463,8 @@ export function VideoPlayer({
           )}
         </div>
       )}
+
+      {activeSessionId && <WatchTogetherChat sessionId={activeSessionId} deviceId={deviceId} />}
 
       <div
         className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent transition-opacity ${
