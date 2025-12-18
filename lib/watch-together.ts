@@ -88,6 +88,8 @@ export class WatchTogetherManager {
   // Update playback state
   async updatePlayback(sessionId: string, time: number, playing: boolean): Promise<void> {
     try {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
       await fetch("/api/watch-together", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

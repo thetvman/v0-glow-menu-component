@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState, useRef } from "react"
 import Hls from "hls.js"
 import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
@@ -242,14 +241,12 @@ export function VideoPlayer({
       clearTimeout(updateTimerRef.current)
     }
 
-    updateTimerRef.current = setTimeout(() => {
-      lastUpdateTimeRef.current = Date.now()
-      console.log("[v0] 📤 Sending session update:", {
-        time: video.currentTime.toFixed(2),
-        playing: !video.paused,
-      })
-      managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
-    }, 200)
+    lastUpdateTimeRef.current = Date.now()
+    console.log("[v0] 📤 Sending session update:", {
+      time: video.currentTime.toFixed(2),
+      playing: !video.paused,
+    })
+    managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
   }
 
   useEffect(() => {
@@ -258,17 +255,20 @@ export function VideoPlayer({
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime)
-      updateSession()
     }
 
     const handlePlay = () => {
       setIsPlaying(true)
-      updateSession()
+      if (!syncingFromRemoteRef.current) {
+        updateSession()
+      }
     }
 
     const handlePause = () => {
       setIsPlaying(false)
-      updateSession()
+      if (!syncingFromRemoteRef.current) {
+        updateSession()
+      }
     }
 
     const handleDurationChange = () => setDuration(video.duration)
@@ -291,17 +291,6 @@ export function VideoPlayer({
       video.removeEventListener("canplay", handleCanPlay)
     }
   }, [activeSessionId])
-
-  const togglePlay = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (video.paused) {
-      video.play()
-    } else {
-      video.pause()
-    }
-  }
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
@@ -360,6 +349,17 @@ export function VideoPlayer({
       return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
     }
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
+  }
+
+  const togglePlay = () => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (video.paused) {
+      video.play()
+    } else {
+      video.pause()
+    }
   }
 
   return (
