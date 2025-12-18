@@ -120,13 +120,11 @@ export function VideoPlayer({
         })
         setParticipants(session.participants)
 
+        // Only host waits when alone
         if (session.participants === 1 && isHost) {
           console.log("[v0] 👤 Host waiting for guests...")
           setWaitingForGuest(true)
           video.pause()
-        } else {
-          console.log("[v0] 👥 Session active with", session.participants, "participants")
-          setWaitingForGuest(false)
         }
       }
     })
@@ -152,9 +150,8 @@ export function VideoPlayer({
 
           setParticipants(session.participants)
 
-          // Stop waiting when guest joins
-          if (session.participants > 1 && waitingForGuest) {
-            console.log("[v0] 🎉 Guest joined! Starting playback")
+          if (session.participants > 1) {
+            console.log("[v0] 🎉 Multiple participants detected! Clearing waiting state")
             setWaitingForGuest(false)
           }
 
