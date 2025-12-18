@@ -16,6 +16,7 @@ interface VideoPlayerProps {
   videoIdentifier?: string
   streamUrl?: string
   activeSessionId?: string
+  sessionCode?: string
   onSessionStart?: (id: string) => void
   isHost?: boolean
 }
@@ -28,6 +29,7 @@ export function VideoPlayer({
   videoIdentifier,
   streamUrl,
   activeSessionId,
+  sessionCode,
   onSessionStart,
   isHost = true,
 }: VideoPlayerProps) {
@@ -48,6 +50,7 @@ export function VideoPlayer({
   const [error, setError] = useState<string | null>(null)
   const [participants, setParticipants] = useState(1)
   const [waitingForGuest, setWaitingForGuest] = useState(false)
+  const [displayCode, setDisplayCode] = useState(sessionCode || "")
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "reconnecting">("connected")
 
   useEffect(() => {
@@ -117,8 +120,10 @@ export function VideoPlayer({
           participants: session.participants,
           isPlaying: session.isPlaying,
           playbackTime: session.playbackTime,
+          code: session.code,
         })
         setParticipants(session.participants)
+        setDisplayCode(session.code)
 
         // Only host waits when alone
         if (session.participants === 1 && isHost) {
@@ -390,18 +395,12 @@ export function VideoPlayer({
             <div className="w-16 h-16 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin" />
             <div className="space-y-6">
               <p className="text-white text-2xl font-semibold">Waiting for guests to join...</p>
-              {activeSessionId ? (
+              {displayCode ? (
                 <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-md rounded-3xl p-8 max-w-md mx-auto border-2 border-white/30 shadow-2xl">
                   <p className="text-white/90 text-base mb-4 font-medium">Share this code with your friends:</p>
-                  <div className="bg-black/40 rounded-2xl p-8 mb-6 border-2 border-white/20 shadow-inner">
+                  <div className="bg-black/40 rounded-2xl p-8 border-2 border-white/20 shadow-inner">
                     <p className="text-white text-6xl font-black tracking-[0.5em] font-mono select-all drop-shadow-lg">
-                      {activeSessionId}
-                    </p>
-                  </div>
-                  <div className="pt-4 border-t border-white/10">
-                    <p className="text-white/50 text-xs mb-2">Or share this link:</p>
-                    <p className="text-blue-300 text-xs font-mono break-all select-all px-3 py-2 bg-black/30 rounded-lg">
-                      {typeof window !== "undefined" && `${window.location.origin}/watch-guest/${activeSessionId}`}
+                      {displayCode}
                     </p>
                   </div>
                 </div>

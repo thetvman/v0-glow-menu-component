@@ -18,15 +18,16 @@ export default function WatchMoviePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const sessionId = searchParams.get("session") || undefined
+  const [sessionCode, setSessionCode] = useState(searchParams.get("code") || undefined)
 
-  const handleSessionCreated = (newSessionId: string) => {
-    // Update URL with session parameter so activeSessionId prop gets set
+  const handleSessionCreated = (newSessionId: string, code: string) => {
     const url = new URL(window.location.href)
     url.searchParams.set("session", newSessionId)
+    url.searchParams.set("code", code)
     window.history.pushState({}, "", url.toString())
 
-    // Force a re-render by updating state
-    router.push(`/watch/movie/${params.id}?session=${newSessionId}`)
+    setSessionCode(code)
+    router.push(`/watch/movie/${params.id}?session=${newSessionId}&code=${code}`)
   }
 
   useEffect(() => {
@@ -98,10 +99,11 @@ export default function WatchMoviePage() {
           subtitle={`${movieInfo.info.releaseDate || ""} • ${movieInfo.info.duration || ""}`}
           autoPlay
           activeSessionId={sessionId}
+          sessionCode={sessionCode}
           videoType="movie"
           videoIdentifier={params.id as string}
           streamUrl={streamUrl}
-          onSessionStart={handleSessionCreated} // Added callback handler
+          onSessionStart={handleSessionCreated}
         />
       </div>
 

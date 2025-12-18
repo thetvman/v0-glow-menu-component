@@ -102,16 +102,6 @@ export function WatchTogetherButton({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Or share this link</label>
-              <div className="flex items-center gap-2">
-                <input readOnly value={shareUrl} className="flex-1 px-3 py-2 text-sm bg-background border rounded-md" />
-                <Button size="icon" variant="outline" onClick={handleCopyLink} className="shrink-0 bg-transparent">
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
             <div className="pt-2 space-y-2">
               <p className="text-xs text-muted-foreground">✓ Everyone can control playback</p>
               <p className="text-xs text-muted-foreground">✓ Automatically syncs play, pause, and seek</p>
