@@ -41,7 +41,10 @@ export function WatchTogetherButton({
       console.log("[v0] Session created:", result.sessionId, "Code:", result.code)
       setSessionCode(result.code)
       setIsOpen(true)
-      onSessionCreated?.(result.sessionId, result.code)
+
+      setTimeout(() => {
+        onSessionCreated?.(result.sessionId, result.code)
+      }, 1000)
     } catch (error) {
       console.error("[v0] Failed to create session:", error)
       alert("Failed to create watch session. Please try again.")

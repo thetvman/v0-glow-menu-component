@@ -48,6 +48,7 @@ export function VideoPlayer({
   const [error, setError] = useState<string | null>(null)
   const [participants, setParticipants] = useState(1)
   const [waitingForGuest, setWaitingForGuest] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "reconnecting">("connected")
 
   useEffect(() => {
     const video = videoRef.current
@@ -118,75 +119,114 @@ export function VideoPlayer({
           playbackTime: session.playbackTime,
         })
         setParticipants(session.participants)
+
         if (session.participants === 1 && isHost) {
-          // Only host should wait
           console.log("[v0] 👤 Host waiting for guests...")
           setWaitingForGuest(true)
           video.pause()
-        } else if (!isHost && session.participants > 0) {
-          // Guest joins immediately
-          console.log("[v0] 👥 Guest joining active session")
+        } else {
+          console.log("[v0] 👥 Session active with", session.participants, "participants")
           setWaitingForGuest(false)
         }
       }
     })
 
-    // Subscribe to updates
-    manager.subscribe(activeSessionId, (session: WatchSession) => {
-      console.log("[v0] 📡 Received sync update (syncingRef:", syncingRef.current, "):", {
-        participants: session.participants,
-        playbackTime: session.playbackTime.toFixed(2),
-        isPlaying: session.isPlaying,
-        currentVideoTime: video.currentTime.toFixed(2),
-        currentlyPlaying: !video.paused,
-      })
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
 
-      setParticipants(session.participants)
+    const setupSubscription = () => {
+      // Subscribe to updates
+      manager.subscribe(
+        activeSessionId,
+        (session: WatchSession) => {
+          reconnectAttempts = 0
+          setConnectionStatus("connected")
 
-      // Stop waiting when guest joins
-      if (session.participants > 1 && waitingForGuest) {
-        console.log("[v0] 🎉 Guest joined! Starting playback")
-        setWaitingForGuest(false)
-      }
+          console.log("[v0] 📡 Received sync update (syncingRef:", syncingRef.current, "):", {
+            participants: session.participants,
+            playbackTime: session.playbackTime.toFixed(2),
+            isPlaying: session.isPlaying,
+            currentVideoTime: video.currentTime.toFixed(2),
+            currentlyPlaying: !video.paused,
+          })
 
-      const wasSyncing = syncingRef.current
-      syncingRef.current = true
+          setParticipants(session.participants)
 
-      // Sync playback state
-      if (session.isPlaying && video.paused) {
-        console.log("[v0] ▶️ Starting playback (received play command)")
-        video.play().catch((err) => console.error("[v0] Play error:", err))
-      } else if (!session.isPlaying && !video.paused) {
-        console.log("[v0] ⏸️ Pausing playback (received pause command)")
-        video.pause()
-      }
+          // Stop waiting when guest joins
+          if (session.participants > 1 && waitingForGuest) {
+            console.log("[v0] 🎉 Guest joined! Starting playback")
+            setWaitingForGuest(false)
+          }
 
-      // Sync time if off by more than 2 seconds
-      const timeDiff = Math.abs(video.currentTime - session.playbackTime)
-      if (timeDiff > 2) {
-        console.log(
-          "[v0] ⏩ Seeking to:",
-          session.playbackTime.toFixed(2),
-          "(was at:",
-          video.currentTime.toFixed(2),
-          ", diff:",
-          timeDiff.toFixed(2),
-          ")",
-        )
-        video.currentTime = session.playbackTime
-      }
+          if (syncingRef.current) {
+            console.log("[v0] ⏭️ Skipping sync (already syncing)")
+            return
+          }
 
-      setTimeout(() => {
-        syncingRef.current = false
-        console.log("[v0] ✅ Sync complete, ready for next update")
-      }, 500)
-    })
+          syncingRef.current = true
+
+          // Sync playback state
+          if (session.isPlaying && video.paused) {
+            console.log("[v0] ▶️ Starting playback (received play command)")
+            video.play().catch((err) => {
+              console.error("[v0] Play error:", err)
+              syncingRef.current = false
+            })
+          } else if (!session.isPlaying && !video.paused) {
+            console.log("[v0] ⏸️ Pausing playback (received pause command)")
+            video.pause()
+          }
+
+          const timeDiff = Math.abs(video.currentTime - session.playbackTime)
+          if (timeDiff > 2.5) {
+            console.log(
+              "[v0] ⏩ Seeking to:",
+              session.playbackTime.toFixed(2),
+              "(was at:",
+              video.currentTime.toFixed(2),
+              ", diff:",
+              timeDiff.toFixed(2),
+              ")",
+            )
+            video.currentTime = session.playbackTime
+          }
+
+          setTimeout(() => {
+            syncingRef.current = false
+            console.log("[v0] ✅ Sync complete, ready for next update")
+          }, 1000)
+        },
+        (error: string) => {
+          console.error("[v0] ❌ Subscription error:", error)
+          setConnectionStatus("disconnected")
+
+          if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            console.log(
+              `[v0] 🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`,
+            )
+            setConnectionStatus("reconnecting")
+
+            setTimeout(() => {
+              console.log("[v0] 🔌 Reconnecting...")
+              setupSubscription()
+            }, delay)
+          } else {
+            console.error("[v0] ❌ Max reconnection attempts reached")
+            setConnectionStatus("disconnected")
+          }
+        },
+      )
+    }
+
+    setupSubscription()
 
     return () => {
       console.log("[v0] 🧹 Cleaning up watch session")
       manager.unsubscribe()
     }
-  }, [activeSessionId, waitingForGuest, isHost]) // Added isHost to dependencies
+  }, [activeSessionId, isHost])
 
   const updateSession = () => {
     const video = videoRef.current
@@ -354,6 +394,7 @@ export function VideoPlayer({
             <div>
               <p className="text-white text-xl font-semibold mb-2">Waiting for guests...</p>
               <p className="text-white/70">Share the session code to start watching together</p>
+              <p className="text-white/50 text-sm mt-2">Click the share button again to view the session code</p>
             </div>
           </div>
         </div>
@@ -363,6 +404,21 @@ export function VideoPlayer({
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
           <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
+      {activeSessionId && connectionStatus !== "connected" && (
+        <div className="absolute top-6 left-6 z-50">
+          <div
+            className={`px-4 py-2 rounded-full flex items-center gap-2 shadow-lg ${
+              connectionStatus === "reconnecting" ? "bg-yellow-500" : "bg-red-500"
+            }`}
+          >
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            <span className="text-white text-sm font-medium">
+              {connectionStatus === "reconnecting" ? "Reconnecting..." : "Disconnected"}
+            </span>
+          </div>
         </div>
       )}
 

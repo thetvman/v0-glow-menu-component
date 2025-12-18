@@ -16,6 +16,8 @@ export interface WatchSession {
 export class WatchTogetherManager {
   private supabase = createClient()
   private channel: RealtimeChannel | null = null
+  private lastHeartbeat: number = Date.now()
+  private heartbeatInterval: NodeJS.Timeout | null = null
 
   // Create a new watch session
   async createSession(
@@ -97,17 +99,21 @@ export class WatchTogetherManager {
   }
 
   // Subscribe to session changes
-  subscribe(sessionId: string, callback: (session: WatchSession) => void): void {
+  subscribe(sessionId: string, callback: (session: WatchSession) => void, onError?: (error: string) => void): void {
     if (this.channel) {
       console.log("[v0] 🔌 Unsubscribing from previous channel")
       this.channel.unsubscribe()
+    }
+
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
     }
 
     const deviceId = Math.random().toString(36).substring(7)
     console.log("[v0] 🔌 Device ID:", deviceId, "- Setting up realtime subscription for session:", sessionId)
 
     this.channel = this.supabase
-      .channel(`session:${sessionId}:${deviceId}`) // Add unique device ID to channel name to prevent conflicts
+      .channel(`session:${sessionId}:${deviceId}`)
       .on(
         "postgres_changes",
         {
@@ -117,6 +123,8 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
+          this.lastHeartbeat = Date.now()
+
           console.log(`[v0] ⚡ Device ${deviceId} received UPDATE event from Supabase!`, payload)
           if (payload.new && payload.new.id === sessionId) {
             const session = this.mapSession(payload.new)
@@ -140,27 +148,49 @@ export class WatchTogetherManager {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
+          this.lastHeartbeat = Date.now()
           console.log(`[v0] ⚡ Device ${deviceId} INSERT event received (new participant)!`, payload)
         },
       )
       .subscribe((status, err) => {
         if (err) {
           console.error(`[v0] ❌ Device ${deviceId} subscription error:`, err)
+          onError?.(`Subscription error: ${err.message}`)
         }
         console.log(`[v0] 📡 Device ${deviceId} subscription status:`, status, "for session:", sessionId)
         if (status === "SUBSCRIBED") {
           console.log(`[v0] ✅ Device ${deviceId} successfully subscribed to realtime updates for session:`, sessionId)
+          this.lastHeartbeat = Date.now()
         } else if (status === "CHANNEL_ERROR") {
           console.error(
             `[v0] ❌ Device ${deviceId} channel error - realtime may not be enabled on watch_sessions table`,
           )
+          onError?.("Channel error - realtime not enabled")
         } else if (status === "TIMED_OUT") {
           console.error(`[v0] ⏱️ Device ${deviceId} subscription timed out - check network connection`)
+          onError?.("Connection timed out")
+        } else if (status === "CLOSED") {
+          console.log(`[v0] 🔌 Device ${deviceId} channel closed`)
+          onError?.("Connection closed")
         }
       })
+
+    this.heartbeatInterval = setInterval(() => {
+      const timeSinceLastHeartbeat = Date.now() - this.lastHeartbeat
+      if (timeSinceLastHeartbeat > 30000) {
+        // 30 seconds without update
+        console.warn(`[v0] 💔 No heartbeat for ${timeSinceLastHeartbeat}ms - connection may be dead`)
+        onError?.("Connection may be lost")
+      }
+    }, 10000) // Check every 10 seconds
   }
 
   unsubscribe(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
+      this.heartbeatInterval = null
+    }
+
     if (this.channel) {
       this.channel.unsubscribe()
       this.channel = null
