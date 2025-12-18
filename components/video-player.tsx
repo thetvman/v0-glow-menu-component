@@ -1,9 +1,22 @@
 "use client"
 
 import type React from "react"
+
 import { useEffect, useState, useRef } from "react"
 import Hls from "hls.js"
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
+  SkipBack,
+  SkipForward,
+  Users,
+  RotateCcw,
+  Copy,
+  Check,
+} from "lucide-react"
 import { WatchTogetherDialog } from "./watch-together-dialog"
 import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
 
@@ -16,8 +29,8 @@ interface VideoPlayerProps {
   videoIdentifier?: string
   streamUrl?: string
   activeSessionId?: string
+  sessionCode?: string
   onSessionStart?: (id: string) => void
-  isHost?: boolean
 }
 
 export function VideoPlayer({
@@ -28,15 +41,16 @@ export function VideoPlayer({
   videoIdentifier,
   streamUrl,
   activeSessionId,
+  sessionCode,
   onSessionStart,
-  isHost = true,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const managerRef = useRef<WatchTogetherManager | null>(null)
-  const syncingFromRemoteRef = useRef(false)
-  const lastUpdateTimeRef = useRef(0)
+  const syncingRef = useRef(false)
   const updateTimerRef = useRef<NodeJS.Timeout>()
+  const waitingForGuestRef = useRef(false)
+  const participantsRef = useRef(1)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -48,7 +62,16 @@ export function VideoPlayer({
   const [error, setError] = useState<string | null>(null)
   const [participants, setParticipants] = useState(1)
   const [waitingForGuest, setWaitingForGuest] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "reconnecting">("connected")
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+
+  useEffect(() => {
+    waitingForGuestRef.current = waitingForGuest
+  }, [waitingForGuest])
+
+  useEffect(() => {
+    participantsRef.current = participants
+  }, [participants])
 
   useEffect(() => {
     const video = videoRef.current
@@ -105,148 +128,96 @@ export function VideoPlayer({
     const video = videoRef.current
     if (!video) return
 
-    console.log("[v0] 🎬 Setting up watch session for:", activeSessionId, "isHost:", isHost)
-
     const manager = new WatchTogetherManager()
     managerRef.current = manager
+
+    console.log("[v0] 🎬 Setting up watch together for session:", activeSessionId)
 
     // Get initial session state
     manager.getSession(activeSessionId).then((session) => {
       if (session) {
         console.log("[v0] 📊 Initial session state:", {
           participants: session.participants,
-          isPlaying: session.isPlaying,
           playbackTime: session.playbackTime,
+          isPlaying: session.isPlaying,
         })
         setParticipants(session.participants)
 
-        // Only host waits when alone
-        if (session.participants === 1 && isHost) {
-          console.log("[v0] 👤 Host waiting for guests...")
+        if (session.participants === 1) {
+          console.log("[v0] ⏸️ Host waiting for guests to join...")
           setWaitingForGuest(true)
           video.pause()
+        } else {
+          console.log("[v0] ▶️ Guest joining - participants already present")
+          setWaitingForGuest(false)
         }
       }
     })
 
-    let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
+    // Subscribe to updates
+    manager.subscribe(activeSessionId, (session: WatchSession) => {
+      if (syncingRef.current) return
 
-    const setupSubscription = () => {
-      // Subscribe to updates
-      manager.subscribe(
-        activeSessionId,
-        (session: WatchSession) => {
-          reconnectAttempts = 0
-          setConnectionStatus("connected")
+      console.log("[v0] 📡 Received sync update:", {
+        participants: session.participants,
+        playbackTime: session.playbackTime.toFixed(2),
+        isPlaying: session.isPlaying,
+        currentVideoTime: video.currentTime.toFixed(2),
+        currentlyPlaying: !video.paused,
+      })
 
-          console.log("[v0] 📡 Received sync update:", {
-            participants: session.participants,
-            playbackTime: session.playbackTime.toFixed(2),
-            isPlaying: session.isPlaying,
-            currentVideoTime: video.currentTime.toFixed(2),
-            currentlyPlaying: !video.paused,
-          })
+      setParticipants(session.participants)
 
-          setParticipants(session.participants)
+      if (session.participants > 1 && waitingForGuestRef.current) {
+        console.log("[v0] 🎉 Guest joined! Starting playback for everyone")
+        setWaitingForGuest(false)
+      }
 
-          if (session.participants > 1) {
-            console.log("[v0] 🎉 Multiple participants detected! Clearing waiting state")
-            setWaitingForGuest(false)
-          }
+      syncingRef.current = true
 
-          const timeSinceLastUpdate = Date.now() - lastUpdateTimeRef.current
-          if (timeSinceLastUpdate < 300) {
-            console.log("[v0] ⏭️ Skipping sync (just sent update", timeSinceLastUpdate, "ms ago)")
-            return
-          }
+      // Sync playback state
+      if (session.isPlaying && video.paused) {
+        console.log("[v0] ▶️ Starting playback (received play command)")
+        video.play()
+      } else if (!session.isPlaying && !video.paused) {
+        console.log("[v0] ⏸️ Pausing playback (received pause command)")
+        video.pause()
+      }
 
-          if (syncingFromRemoteRef.current) {
-            console.log("[v0] ⏭️ Skipping sync (already syncing from remote)")
-            return
-          }
+      // Sync time if off by more than 2 seconds
+      const timeDiff = Math.abs(video.currentTime - session.playbackTime)
+      if (timeDiff > 2) {
+        console.log(
+          "[v0] ⏩ Seeking to:",
+          session.playbackTime.toFixed(2),
+          "(was at:",
+          video.currentTime.toFixed(2),
+          ")",
+        )
+        video.currentTime = session.playbackTime
+      }
 
-          syncingFromRemoteRef.current = true
-
-          if (session.isPlaying && video.paused) {
-            console.log("[v0] ▶️ Starting playback (received play command)")
-            video.play().catch((err) => {
-              console.error("[v0] Play error:", err)
-              syncingFromRemoteRef.current = false
-            })
-          } else if (!session.isPlaying && !video.paused) {
-            console.log("[v0] ⏸️ Pausing playback (received pause command)")
-            video.pause()
-          }
-
-          const timeDiff = Math.abs(video.currentTime - session.playbackTime)
-          if (timeDiff > 2.5) {
-            console.log(
-              "[v0] ⏩ Seeking to:",
-              session.playbackTime.toFixed(2),
-              "(was at:",
-              video.currentTime.toFixed(2),
-              ", diff:",
-              timeDiff.toFixed(2),
-              ")",
-            )
-            video.currentTime = session.playbackTime
-          }
-
-          setTimeout(() => {
-            syncingFromRemoteRef.current = false
-            console.log("[v0] ✅ Remote sync complete")
-          }, 500)
-        },
-        (error: string) => {
-          console.error("[v0] ❌ Subscription error:", error)
-          setConnectionStatus("disconnected")
-
-          if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            console.log(
-              `[v0] 🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`,
-            )
-            setConnectionStatus("reconnecting")
-
-            setTimeout(() => {
-              console.log("[v0] 🔌 Reconnecting...")
-              setupSubscription()
-            }, delay)
-          } else {
-            console.error("[v0] ❌ Max reconnection attempts reached")
-            setConnectionStatus("disconnected")
-          }
-        },
-      )
-    }
-
-    setupSubscription()
+      setTimeout(() => {
+        syncingRef.current = false
+      }, 500)
+    })
 
     return () => {
-      console.log("[v0] 🧹 Cleaning up watch session")
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current)
-      }
       manager.unsubscribe()
     }
-  }, [activeSessionId, isHost])
+  }, [activeSessionId])
 
   const updateSession = () => {
     const video = videoRef.current
-    if (!video || !activeSessionId || !managerRef.current) return
+    if (!video || !activeSessionId || !managerRef.current || syncingRef.current) return
 
     if (updateTimerRef.current) {
       clearTimeout(updateTimerRef.current)
     }
 
-    lastUpdateTimeRef.current = Date.now()
-    console.log("[v0] 📤 Sending session update:", {
-      time: video.currentTime.toFixed(2),
-      playing: !video.paused,
-    })
-    managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
+    updateTimerRef.current = setTimeout(() => {
+      managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
+    }, 500)
   }
 
   useEffect(() => {
@@ -255,20 +226,17 @@ export function VideoPlayer({
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime)
+      updateSession()
     }
 
     const handlePlay = () => {
       setIsPlaying(true)
-      if (!syncingFromRemoteRef.current) {
-        updateSession()
-      }
+      updateSession()
     }
 
     const handlePause = () => {
       setIsPlaying(false)
-      if (!syncingFromRemoteRef.current) {
-        updateSession()
-      }
+      updateSession()
     }
 
     const handleDurationChange = () => setDuration(video.duration)
@@ -291,6 +259,22 @@ export function VideoPlayer({
       video.removeEventListener("canplay", handleCanPlay)
     }
   }, [activeSessionId])
+
+  const togglePlay = () => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (waitingForGuest) {
+      console.log("[v0] ⏸️ Cannot play - waiting for guests to join")
+      return
+    }
+
+    if (video.paused) {
+      video.play()
+    } else {
+      video.pause()
+    }
+  }
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
@@ -333,10 +317,13 @@ export function VideoPlayer({
 
     console.log("[v0] Restarting video for all participants")
 
+    // Reset video locally
     video.currentTime = 0
 
+    // Update session to restart and play for everyone
     await managerRef.current.restartSession(activeSessionId)
 
+    // Start playing locally
     video.play()
   }
 
@@ -351,14 +338,11 @@ export function VideoPlayer({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
 
-  const togglePlay = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (video.paused) {
-      video.play()
-    } else {
-      video.pause()
+  const copySessionCode = () => {
+    if (sessionCode) {
+      navigator.clipboard.writeText(sessionCode)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
     }
   }
 
@@ -370,6 +354,7 @@ export function VideoPlayer({
     >
       <video ref={videoRef} className="w-full h-full" onClick={togglePlay} />
 
+      {/* Error overlay */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-40">
           <div className="text-center">
@@ -384,65 +369,75 @@ export function VideoPlayer({
         </div>
       )}
 
+      {/* Waiting for guest overlay */}
       {waitingForGuest && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-sm z-40">
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-6 max-w-md px-6">
             <div className="w-16 h-16 mx-auto border-4 border-white/20 border-t-white rounded-full animate-spin" />
-            <div>
-              <p className="text-white text-xl font-semibold mb-2">Waiting for guests...</p>
-              <p className="text-white/70">Share the session code to start watching together</p>
-              <p className="text-white/50 text-sm mt-2">Click the share button again to view the session code</p>
+            <div className="space-y-4">
+              <p className="text-white text-xl font-semibold">Waiting for guests...</p>
+              {sessionCode && (
+                <div className="space-y-3">
+                  <div className="p-6 bg-white/10 backdrop-blur-md rounded-lg border-2 border-dashed border-white/30">
+                    <p className="text-white/70 text-sm mb-2">Share this code:</p>
+                    <p className="text-5xl font-bold text-white tracking-wider">{sessionCode}</p>
+                  </div>
+                  <button
+                    onClick={copySessionCode}
+                    className="w-full px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {codeCopied ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        Copy Code
+                      </>
+                    )}
+                  </button>
+                  <p className="text-white/60 text-sm">Friends can enter this code on the screenshare page to join</p>
+                </div>
+              )}
+              {!sessionCode && <p className="text-white/70">Share the session code to start watching together</p>}
             </div>
           </div>
         </div>
       )}
 
+      {/* Buffering spinner */}
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
           <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
         </div>
       )}
 
-      {activeSessionId && connectionStatus !== "connected" && (
-        <div className="absolute top-6 left-6 z-50">
-          <div
-            className={`px-4 py-2 rounded-full flex items-center gap-2 shadow-lg ${
-              connectionStatus === "reconnecting" ? "bg-yellow-500" : "bg-red-500"
-            }`}
-          >
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            <span className="text-white text-sm font-medium">
-              {connectionStatus === "reconnecting" ? "Reconnecting..." : "Disconnected"}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {activeSessionId && (
+      {/* Watch together badge and restart button */}
+      {activeSessionId && participants > 1 && (
         <div className="absolute top-6 right-6 z-50 flex items-center gap-3">
-          {participants > 1 && (
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
-              <Users className="w-4 h-4 text-white" />
-              <span className="text-white font-semibold">{participants}</span>
-            </div>
-          )}
-          {isHost && (
-            <button
-              onClick={restart}
-              className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
-              title="Restart for everyone"
-            >
-              <RotateCcw className="w-5 h-5 text-white" />
-            </button>
-          )}
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+            <Users className="w-4 h-4 text-white" />
+            <span className="text-white font-semibold">{participants}</span>
+          </div>
+          <button
+            onClick={restart}
+            className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
+            title="Restart for everyone"
+          >
+            <RotateCcw className="w-5 h-5 text-white" />
+          </button>
         </div>
       )}
 
+      {/* Controls */}
       <div
         className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent transition-opacity ${
           showControls ? "opacity-100" : "opacity-0"
         }`}
       >
+        {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 p-6 flex items-start justify-between">
           <div>
             <h2 className="text-2xl font-bold text-white mb-1">{title}</h2>
@@ -459,7 +454,9 @@ export function VideoPlayer({
           )}
         </div>
 
+        {/* Bottom controls */}
         <div className="absolute bottom-0 left-0 right-0 p-6 space-y-4">
+          {/* Progress bar */}
           <div>
             <input
               type="range"
@@ -478,8 +475,10 @@ export function VideoPlayer({
             </div>
           </div>
 
+          {/* Control buttons */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {/* Play/Pause */}
               <button
                 onClick={togglePlay}
                 className="w-12 h-12 rounded-full bg-white flex items-center justify-center hover:scale-110 transition-transform"
@@ -487,6 +486,7 @@ export function VideoPlayer({
                 {isPlaying ? <Pause className="w-6 h-6 text-black" /> : <Play className="w-6 h-6 text-black ml-0.5" />}
               </button>
 
+              {/* Skip buttons */}
               <button
                 onClick={() => skip(-10)}
                 className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
@@ -500,6 +500,7 @@ export function VideoPlayer({
                 <SkipForward className="w-5 h-5 text-white" />
               </button>
 
+              {/* Volume */}
               <div className="flex items-center gap-2">
                 <button onClick={toggleMute} className="p-2">
                   {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
@@ -518,6 +519,7 @@ export function VideoPlayer({
               </div>
             </div>
 
+            {/* Fullscreen */}
             <button
               onClick={() => videoRef.current?.requestFullscreen()}
               className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"

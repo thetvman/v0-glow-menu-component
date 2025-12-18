@@ -11,7 +11,7 @@ interface Props {
   videoId: string
   videoTitle: string
   streamUrl: string
-  onSessionStart: (sessionId: string) => void
+  onSessionStart: (sessionId: string, code: string) => void
 }
 
 export function WatchTogetherDialog({ videoType, videoId, videoTitle, streamUrl, onSessionStart }: Props) {
@@ -26,8 +26,9 @@ export function WatchTogetherDialog({ videoType, videoId, videoTitle, streamUrl,
     const result = await manager.createSession(videoType, videoId, videoTitle, streamUrl)
 
     if (result) {
+      console.log("[v0] 🎬 Session created - host will wait for guests")
       setCode(result.code)
-      onSessionStart(result.sessionId)
+      onSessionStart(result.sessionId, result.code)
     }
     setLoading(false)
   }
