@@ -154,7 +154,7 @@ export default function SearchPage() {
                       <MovieCard
                         key={movie.stream_id}
                         movie={movie}
-                        onClick={() => console.log("Play movie:", movie.name)}
+                        onClick={() => router.push(`/watch/movie/${movie.stream_id}`)}
                       />
                     ))}
                   </div>
@@ -169,7 +169,7 @@ export default function SearchPage() {
                       <SeriesCard
                         key={series.series_id}
                         series={series}
-                        onClick={() => console.log("Watch series:", series.name)}
+                        onClick={() => router.push(`/series/${series.series_id}`)}
                       />
                     ))}
                   </div>
@@ -184,7 +184,7 @@ export default function SearchPage() {
                       <LiveChannelCard
                         key={channel.stream_id}
                         channel={channel}
-                        onClick={() => console.log("Watch live:", channel.name)}
+                        onClick={() => router.push(`/watch/live/${channel.stream_id}`)}
                       />
                     ))}
                   </div>
@@ -198,7 +198,7 @@ export default function SearchPage() {
                   <MovieCard
                     key={movie.stream_id}
                     movie={movie}
-                    onClick={() => console.log("Play movie:", movie.name)}
+                    onClick={() => router.push(`/watch/movie/${movie.stream_id}`)}
                   />
                 ))}
               </div>
@@ -210,7 +210,7 @@ export default function SearchPage() {
                   <SeriesCard
                     key={series.series_id}
                     series={series}
-                    onClick={() => console.log("Watch series:", series.name)}
+                    onClick={() => router.push(`/series/${series.series_id}`)}
                   />
                 ))}
               </div>
@@ -222,7 +222,7 @@ export default function SearchPage() {
                   <LiveChannelCard
                     key={channel.stream_id}
                     channel={channel}
-                    onClick={() => console.log("Watch live:", channel.name)}
+                    onClick={() => router.push(`/watch/live/${channel.stream_id}`)}
                   />
                 ))}
               </div>
