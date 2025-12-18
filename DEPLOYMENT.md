@@ -1,177 +1,116 @@
 # StrawTV Deployment Guide
 
-## Prerequisites
+## Quick Start
 
-- Node.js 18 or higher
-- npm or pnpm package manager
-- A dedicated server with SSH access
-- Supabase project set up with required tables
+Run these commands on your dedicated server:
 
-## Quick Deployment
+```bash
+# 1. Clone the repository
+git clone YOUR_GITHUB_REPO_URL
+cd v0-glow-menu-component
 
-1. **Clone the repository:**
-   ```bash
-   git clone YOUR_GITHUB_REPO_URL
-   cd v0-glow-menu-component
-   ```
+# 2. Create environment file
+nano .env.local
+```
 
-2. **Create environment file:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual values
-   nano .env
-   ```
-
-3. **Make deployment script executable:**
-   ```bash
-   chmod +x deploy.sh stop.sh restart.sh logs.sh
-   ```
-
-4. **Run deployment:**
-   ```bash
-   ./deploy.sh
-   ```
-
-## Environment Variables
-
-Create a `.env` file in the root directory with these variables:
-
+Add your Supabase credentials:
 ```env
-# Supabase Configuration
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# Database (if using direct connection)
-POSTGRES_URL=your_postgres_connection_string
-POSTGRES_PRISMA_URL=your_postgres_prisma_url
-
-# App Configuration
-NODE_ENV=production
-PORT=3000
+# Add other required environment variables
+POSTGRES_URL=your_postgres_url
 ```
-
-## Managing the Application
-
-### View Logs
-```bash
-./logs.sh
-# or
-pm2 logs strawtv
-```
-
-### Stop Application
-```bash
-./stop.sh
-# or
-pm2 stop strawtv
-```
-
-### Restart Application
-```bash
-./restart.sh
-# or
-pm2 restart strawtv
-```
-
-### Check Status
-```bash
-pm2 status
-```
-
-### Monitor Resources
-```bash
-pm2 monit
-```
-
-## HTTP Configuration
-
-By default, the app runs on HTTP (not HTTPS) on port 3000. To access:
-
-- **Locally:** http://localhost:3000
-- **Network:** http://YOUR_SERVER_IP:3000
-
-### Changing Port
-
-Edit `ecosystem.config.json` and change the PORT value:
-```json
-"env": {
-  "PORT": 8080
-}
-```
-
-Then restart the app.
-
-## Firewall Configuration
-
-Make sure your server firewall allows traffic on the port you're using:
 
 ```bash
-# For Ubuntu/Debian with ufw
-sudo ufw allow 3000/tcp
+# 3. Make scripts executable
+chmod +x deploy.sh start.sh stop.sh restart.sh logs.sh
 
-# For CentOS/RHEL with firewalld
-sudo firewall-cmd --permanent --add-port=3000/tcp
-sudo firewall-cmd --reload
-```
-
-## Updating the Application
-
-1. Pull latest changes:
-   ```bash
-   git pull origin main
-   ```
-
-2. Run deployment script:
-   ```bash
-   ./deploy.sh
-   ```
-
-The script will automatically stop the old version, install dependencies, rebuild, and start the new version.
-
-## Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using the port
-lsof -i :3000
-# Kill the process
-kill -9 PID
-```
-
-### PM2 Not Starting on Boot
-```bash
-pm2 startup systemd -u $USER --hp $HOME
-pm2 save
-```
-
-### Check Application Logs
-```bash
-pm2 logs strawtv --lines 100
-```
-
-### Reset Everything
-```bash
-pm2 delete strawtv
-pm2 save
+# 4. Deploy
 ./deploy.sh
 ```
 
-## Production Considerations
+Your app will be running at `http://YOUR_SERVER_IP:8082`
 
-1. **Use a reverse proxy (Nginx)** for better performance and security
-2. **Set up SSL/TLS** if you need HTTPS (using Let's Encrypt)
-3. **Configure backups** for your database
-4. **Set up monitoring** with PM2 Plus or similar
-5. **Use environment-specific configs** for different stages
+## Management Commands
 
-## Support
-
-For issues, check the logs first:
 ```bash
-pm2 logs strawtv
+# View real-time logs
+./logs.sh
+
+# Stop the application
+./stop.sh
+
+# Start the application
+./start.sh
+
+# Restart the application
+./restart.sh
+
+# Check status
+pm2 status
+
+# Monitor resources
+pm2 monit
 ```
 
-If problems persist, check the GitHub issues page or contact support.
+## Updating the App
+
+```bash
+git pull
+npm install
+npm run build
+pm2 restart strawtv
+```
+
+## Firewall Setup
+
+Allow port 8082 through your firewall:
+
+```bash
+# Ubuntu/Debian
+sudo ufw allow 8082/tcp
+
+# CentOS/RHEL
+sudo firewall-cmd --permanent --add-port=8082/tcp
+sudo firewall-cmd --reload
+```
+
+## Troubleshooting
+
+**Port already in use:**
+```bash
+lsof -i :8082
+kill -9 PID
+```
+
+**View error logs:**
+```bash
+pm2 logs strawtv --err
+```
+
+**Reset everything:**
+```bash
+pm2 delete strawtv
+./deploy.sh
+```
+
+**Enable auto-start on server reboot:**
+```bash
+pm2 startup
+pm2 save
+```
+
+## Changing the Port
+
+Edit `deploy.sh` and `start.sh` to change `PORT=8082` to your desired port.
+
+## Production Tips
+
+1. Set up Nginx as a reverse proxy for better performance
+2. Configure automatic backups for your database
+3. Use PM2 monitoring: `pm2 plus`
+4. Keep your environment variables secure and backed up
