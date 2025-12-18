@@ -107,7 +107,7 @@ export class WatchTogetherManager {
     console.log("[v0] 🔌 Device ID:", deviceId, "- Setting up realtime subscription for session:", sessionId)
 
     this.channel = this.supabase
-      .channel(`session:${sessionId}`)
+      .channel(`session:${sessionId}:${deviceId}`) // Add unique device ID to channel name to prevent conflicts
       .on(
         "postgres_changes",
         {

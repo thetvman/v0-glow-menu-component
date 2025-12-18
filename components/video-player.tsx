@@ -104,25 +104,36 @@ export function VideoPlayer({
     const video = videoRef.current
     if (!video) return
 
+    console.log("[v0] 🎬 Setting up watch session for:", activeSessionId, "isHost:", isHost)
+
     const manager = new WatchTogetherManager()
     managerRef.current = manager
 
     // Get initial session state
     manager.getSession(activeSessionId).then((session) => {
       if (session) {
+        console.log("[v0] 📊 Initial session state:", {
+          participants: session.participants,
+          isPlaying: session.isPlaying,
+          playbackTime: session.playbackTime,
+        })
         setParticipants(session.participants)
-        if (session.participants === 1) {
+        if (session.participants === 1 && isHost) {
+          // Only host should wait
+          console.log("[v0] 👤 Host waiting for guests...")
           setWaitingForGuest(true)
           video.pause()
+        } else if (!isHost && session.participants > 0) {
+          // Guest joins immediately
+          console.log("[v0] 👥 Guest joining active session")
+          setWaitingForGuest(false)
         }
       }
     })
 
     // Subscribe to updates
     manager.subscribe(activeSessionId, (session: WatchSession) => {
-      if (syncingRef.current) return
-
-      console.log("[v0] 📡 Received sync update:", {
+      console.log("[v0] 📡 Received sync update (syncingRef:", syncingRef.current, "):", {
         participants: session.participants,
         playbackTime: session.playbackTime.toFixed(2),
         isPlaying: session.isPlaying,
@@ -134,16 +145,17 @@ export function VideoPlayer({
 
       // Stop waiting when guest joins
       if (session.participants > 1 && waitingForGuest) {
-        console.log("[v0] Guest joined! Starting playback")
+        console.log("[v0] 🎉 Guest joined! Starting playback")
         setWaitingForGuest(false)
       }
 
+      const wasSyncing = syncingRef.current
       syncingRef.current = true
 
       // Sync playback state
       if (session.isPlaying && video.paused) {
         console.log("[v0] ▶️ Starting playback (received play command)")
-        video.play()
+        video.play().catch((err) => console.error("[v0] Play error:", err))
       } else if (!session.isPlaying && !video.paused) {
         console.log("[v0] ⏸️ Pausing playback (received pause command)")
         video.pause()
@@ -157,6 +169,8 @@ export function VideoPlayer({
           session.playbackTime.toFixed(2),
           "(was at:",
           video.currentTime.toFixed(2),
+          ", diff:",
+          timeDiff.toFixed(2),
           ")",
         )
         video.currentTime = session.playbackTime
@@ -164,23 +178,34 @@ export function VideoPlayer({
 
       setTimeout(() => {
         syncingRef.current = false
+        console.log("[v0] ✅ Sync complete, ready for next update")
       }, 500)
     })
 
     return () => {
+      console.log("[v0] 🧹 Cleaning up watch session")
       manager.unsubscribe()
     }
-  }, [activeSessionId, waitingForGuest])
+  }, [activeSessionId, waitingForGuest, isHost]) // Added isHost to dependencies
 
   const updateSession = () => {
     const video = videoRef.current
-    if (!video || !activeSessionId || !managerRef.current || syncingRef.current) return
+    if (!video || !activeSessionId || !managerRef.current) return
+
+    if (syncingRef.current) {
+      console.log("[v0] ⏭️ Skipping session update (currently syncing)")
+      return
+    }
 
     if (updateTimerRef.current) {
       clearTimeout(updateTimerRef.current)
     }
 
     updateTimerRef.current = setTimeout(() => {
+      console.log("[v0] 📤 Updating session state:", {
+        time: video.currentTime.toFixed(2),
+        playing: !video.paused,
+      })
       managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
     }, 500)
   }
