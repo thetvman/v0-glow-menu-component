@@ -18,6 +18,7 @@ interface VideoPlayerProps {
   streamUrl?: string
   activeSessionId?: string
   onSessionStart?: (id: string) => void
+  isHost?: boolean
 }
 
 export function VideoPlayer({
@@ -29,6 +30,7 @@ export function VideoPlayer({
   streamUrl,
   activeSessionId,
   onSessionStart,
+  isHost = true,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -346,13 +348,15 @@ export function VideoPlayer({
             <Users className="w-4 h-4 text-white" />
             <span className="text-white font-semibold">{participants}</span>
           </div>
-          <button
-            onClick={restart}
-            className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
-            title="Restart for everyone"
-          >
-            <RotateCcw className="w-5 h-5 text-white" />
-          </button>
+          {isHost && (
+            <button
+              onClick={restart}
+              className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all"
+              title="Restart for everyone"
+            >
+              <RotateCcw className="w-5 h-5 text-white" />
+            </button>
+          )}
         </div>
       )}
 
