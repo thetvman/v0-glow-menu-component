@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useXtream } from "@/lib/xtream-context"
@@ -9,37 +9,27 @@ import { MenuBar } from "@/components/menu-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ContentCarousel } from "@/components/content-carousel"
 import { MovieCard } from "@/components/movie-card"
-import { Loader2, Film, AlertCircle } from "lucide-react"
+import { Film, AlertCircle, ArrowRight } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { getOptimalItemsPerPage } from "@/lib/performance-utils"
+import { SkeletonCarousel } from "@/components/skeleton-carousel"
 
-const ITEMS_PER_PAGE = 30
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
-
-interface CachedData {
-  categories: VODCategory[]
-  moviesByCategory: Map<string, VODStream[]>
-  timestamp: number
-}
-
-let cachedMovieData: CachedData | null = null
+const INITIAL_MOVIES_PER_CATEGORY = 6
+const LOAD_MORE_COUNT = 15
 
 export default function MoviesPage() {
   const router = useRouter()
   const { api, isConnected, availableContent } = useXtream()
   const [categories, setCategories] = useState<VODCategory[]>([])
-  const [moviesByCategory, setMoviesByCategory] = useState<Map<string, VODStream[]>>(new Map())
-  const [categoryPages, setCategoryPages] = useState<Map<string, number>>(new Map())
+  const [moviesByCategory, setMoviesByCategory] = useState<
+    Record<string, { movies: VODStream[]; loaded: number; hasMore: boolean; loading: boolean }>
+  >({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [categoryMovieCounts, setCategoryMovieCounts] = useState<Map<string, number>>(new Map())
-
-  const adaptiveITEMS_PER_PAGE = useMemo(() => getOptimalItemsPerPage(), [])
 
   useEffect(() => {
     if (isConnected && api) {
-      loadData()
+      loadCategories()
     } else if (!isConnected) {
       setLoading(false)
     }
@@ -51,108 +41,91 @@ export default function MoviesPage() {
     }
   }, [availableContent, isConnected, router])
 
-  async function loadData() {
+  async function loadCategories() {
     if (!api) return
 
     try {
       setLoading(true)
       setError(null)
 
-      const now = Date.now()
-      if (cachedMovieData && now - cachedMovieData.timestamp < CACHE_DURATION) {
-        console.log("[v0] Using cached movie data")
-        setCategories(cachedMovieData.categories)
-        setMoviesByCategory(cachedMovieData.moviesByCategory)
-
-        const pageMap = new Map<string, number>()
-        cachedMovieData.categories.forEach((cat) => pageMap.set(cat.category_id, 1))
-        setCategoryPages(pageMap)
-
-        setLoading(false)
-        return
-      }
-
-      console.log("[v0] Fetching fresh movie data")
-
       const categoriesData = await api.getVodCategories()
       setCategories(categoriesData)
 
-      const movieMap = new Map<string, VODStream[]>()
-      const pageMap = new Map<string, number>()
-      const countMap = new Map<string, number>()
-
-      const categoriesToPreload = categoriesData.slice(0, 3)
-
-      await Promise.all(
-        categoriesToPreload.map(async (category) => {
-          try {
-            const categoryMovies = await api.getVodStreamsByCategory(category.category_id)
-            movieMap.set(category.category_id, categoryMovies.slice(0, adaptiveITEMS_PER_PAGE))
-            pageMap.set(category.category_id, 1)
-            countMap.set(category.category_id, categoryMovies.length)
-          } catch (err) {
-            console.error(`[v0] Failed to load category ${category.category_name}:`, err)
-          }
-        }),
-      )
-
-      categoriesData.slice(3).forEach((category) => {
-        movieMap.set(category.category_id, [])
-        pageMap.set(category.category_id, 0)
-        countMap.set(category.category_id, 0)
+      const initialState: Record<string, any> = {}
+      categoriesData.forEach((cat) => {
+        initialState[cat.category_id] = {
+          movies: [],
+          loaded: 0,
+          hasMore: true,
+          loading: false,
+        }
       })
+      setMoviesByCategory(initialState)
 
-      setMoviesByCategory(movieMap)
-      setCategoryPages(pageMap)
-      setCategoryMovieCounts(countMap)
-
-      cachedMovieData = {
-        categories: categoriesData,
-        moviesByCategory: movieMap,
-        timestamp: now,
+      for (let i = 0; i < Math.min(3, categoriesData.length); i++) {
+        await loadMoviesForCategory(categoriesData[i].category_id, INITIAL_MOVIES_PER_CATEGORY)
       }
     } catch (err) {
       setError("Failed to load movies. Please check your connection.")
-      console.error("[v0] Error loading movies:", err)
+      console.error("[v0] Error loading categories:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const loadMoreForCategory = async (categoryId: string) => {
+  async function loadMoviesForCategory(categoryId: string, limit: number) {
     if (!api) return
 
-    const currentPage = categoryPages.get(categoryId) || 0
-    const currentMovies = moviesByCategory.get(categoryId) || []
+    const currentState = moviesByCategory[categoryId]
+    if (currentState?.loading) return
 
-    if (currentPage === 0) {
-      try {
-        const categoryMovies = await api.getVodStreamsByCategory(categoryId)
-        const firstBatch = categoryMovies.slice(0, adaptiveITEMS_PER_PAGE)
+    try {
+      setMoviesByCategory((prev) => ({
+        ...prev,
+        [categoryId]: { ...prev[categoryId], loading: true },
+      }))
 
-        setMoviesByCategory(new Map(moviesByCategory).set(categoryId, firstBatch))
-        setCategoryPages(new Map(categoryPages).set(categoryId, 1))
-        setCategoryMovieCounts(new Map(categoryMovieCounts).set(categoryId, categoryMovies.length))
+      // Fetch movies for this category
+      const allCategoryMovies = await api.getVodStreams(categoryId)
+      const currentLoaded = currentState?.loaded || 0
+      const newMovies = allCategoryMovies.slice(currentLoaded, currentLoaded + limit)
+      const hasMore = currentLoaded + limit < allCategoryMovies.length
 
-        sessionStorage.setItem(`category_${categoryId}`, JSON.stringify(categoryMovies))
-      } catch (err) {
-        console.error(`[v0] Failed to load category movies:`, err)
-      }
+      setMoviesByCategory((prev) => ({
+        ...prev,
+        [categoryId]: {
+          movies: [...(prev[categoryId]?.movies || []), ...newMovies],
+          loaded: currentLoaded + newMovies.length,
+          hasMore,
+          loading: false,
+        },
+      }))
+    } catch (err) {
+      console.error(`[v0] Error loading movies for category ${categoryId}:`, err)
+      setMoviesByCategory((prev) => ({
+        ...prev,
+        [categoryId]: { ...prev[categoryId], loading: false },
+      }))
+    }
+  }
+
+  const handleLoadMore = async (categoryId: string) => {
+    const state = moviesByCategory[categoryId]
+    console.log("[v0] handleLoadMore called for category:", categoryId, state)
+
+    if (!state?.hasMore || state.loading) {
+      console.log("[v0] Skipping load more - hasMore:", state?.hasMore, "loading:", state?.loading)
       return
     }
 
-    const storedMovies = sessionStorage.getItem(`category_${categoryId}`)
-    if (!storedMovies) return
+    console.log("[v0] Loading more movies for category:", categoryId)
+    await loadMoviesForCategory(categoryId, LOAD_MORE_COUNT)
+  }
 
-    const categoryMovies = JSON.parse(storedMovies) as VODStream[]
-    const nextPage = currentPage + 1
-    const startIdx = currentPage * adaptiveITEMS_PER_PAGE
-    const endIdx = nextPage * adaptiveITEMS_PER_PAGE
-    const newMovies = categoryMovies.slice(startIdx, endIdx)
-
-    if (newMovies.length > 0) {
-      setMoviesByCategory(new Map(moviesByCategory).set(categoryId, [...currentMovies, ...newMovies]))
-      setCategoryPages(new Map(categoryPages).set(categoryId, nextPage))
+  const handleCarouselVisible = async (categoryId: string) => {
+    const state = moviesByCategory[categoryId]
+    if (state?.movies.length === 0 && !state.loading) {
+      await loadMoviesForCategory(categoryId, INITIAL_MOVIES_PER_CATEGORY)
     }
   }
 
@@ -206,14 +179,25 @@ export default function MoviesPage() {
 
   if (loading || availableContent.isLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background">
         <div className="fixed top-4 right-4 z-50">
           <ThemeToggle />
         </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading movies...</p>
+
+        <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+          <div className="mb-8">
+            <MenuBar />
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">Movies</h1>
+            <p className="text-muted-foreground">Browse and discover your favorite films</p>
+          </div>
+
+          <div className="space-y-6">
+            <SkeletonCarousel />
+            <SkeletonCarousel />
+            <SkeletonCarousel />
           </div>
         </div>
       </div>
@@ -246,43 +230,33 @@ export default function MoviesPage() {
         {categories.length > 0 ? (
           <div className="space-y-6">
             {categories.map((category) => {
-              const categoryMovies = moviesByCategory.get(category.category_id) || []
-              const currentPage = categoryPages.get(category.category_id) || 0
-              const totalCategoryMovies = categoryMovieCounts.get(category.category_id) || 0
-              const hasMore = totalCategoryMovies === 0 || categoryMovies.length < totalCategoryMovies
-
-              const shouldShowCategory = currentPage > 0 || totalCategoryMovies > 0
+              const state = moviesByCategory[category.category_id]
+              if (!state) return null
 
               return (
                 <div key={category.category_id}>
-                  <ContentCarousel title={category.category_name} itemCount={categoryMovies.length}>
-                    {categoryMovies.length > 0 ? (
-                      categoryMovies.map((movie) => (
-                        <div key={movie.stream_id} className="flex-shrink-0 w-[150px] sm:w-[180px] md:w-[200px]">
-                          <MovieCard movie={movie} onClick={() => handleMovieClick(movie)} />
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex-shrink-0 w-full text-center py-8">
-                        <button
-                          onClick={() => loadMoreForCategory(category.category_id)}
-                          className="px-6 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
-                        >
-                          Load {category.category_name}
-                        </button>
+                  <ContentCarousel
+                    title={category.category_name}
+                    itemCount={state.movies.length}
+                    hasMore={state.hasMore}
+                    loading={state.loading}
+                    onLoadMore={() => handleLoadMore(category.category_id)}
+                    onVisible={() => handleCarouselVisible(category.category_id)}
+                    actionButton={
+                      <Link href={`/movies/category/${category.category_id}`}>
+                        <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+                          View All
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    }
+                  >
+                    {state.movies.map((movie) => (
+                      <div key={movie.stream_id} className="flex-shrink-0 w-[150px] sm:w-[180px] md:w-[200px]">
+                        <MovieCard movie={movie} onClick={() => handleMovieClick(movie)} />
                       </div>
-                    )}
+                    ))}
                   </ContentCarousel>
-                  {hasMore && categoryMovies.length > 0 && (
-                    <div className="mt-4 text-center">
-                      <button
-                        onClick={() => loadMoreForCategory(category.category_id)}
-                        className="px-6 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
-                      >
-                        Load More ({categoryMovies.length} of {totalCategoryMovies})
-                      </button>
-                    </div>
-                  )}
                 </div>
               )
             })}

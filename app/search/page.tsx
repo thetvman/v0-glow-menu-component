@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useXtream } from "@/lib/xtream-context"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { MenuBar } from "@/components/menu-bar"
 import { MovieCard } from "@/components/movie-card"
 import { SeriesCard } from "@/components/series-card"
@@ -10,11 +10,13 @@ import { LiveChannelCard } from "@/components/live-channel-card"
 import { Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SkeletonCard } from "@/components/skeleton-card"
 import type { VodStream, Series, LiveStream } from "@/lib/xtream-api"
 
 export default function SearchPage() {
   const { isConnected, api } = useXtream()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
@@ -27,14 +29,22 @@ export default function SearchPage() {
   const [allSeries, setAllSeries] = useState<Series[]>([])
   const [allLive, setAllLive] = useState<LiveStream[]>([])
 
+  const [isLoadingContent, setIsLoadingContent] = useState(true)
+
+  const hasLoadedContent = useRef(false)
+  const hasSetInitialQuery = useRef(false)
+
   useEffect(() => {
     if (!isConnected || !api) {
       router.push("/login")
       return
     }
 
-    // Load all content once for client-side filtering
+    if (hasLoadedContent.current) return
+    hasLoadedContent.current = true
+
     const loadAllContent = async () => {
+      setIsLoadingContent(true)
       try {
         const [movies, series, live] = await Promise.all([
           api.getVodStreams().catch(() => []),
@@ -47,55 +57,57 @@ export default function SearchPage() {
         setAllLive(live)
       } catch (error) {
         console.error("[v0] Error loading content:", error)
+      } finally {
+        setIsLoadingContent(false)
       }
     }
 
     loadAllContent()
   }, [isConnected, api, router])
 
-  // Debounced search function
-  const performSearch = useCallback(
-    (query: string) => {
-      if (!query.trim()) {
-        setMovieResults([])
-        setSeriesResults([])
-        setLiveResults([])
-        setIsSearching(false)
-        return
-      }
+  useEffect(() => {
+    if (hasSetInitialQuery.current) return
 
-      setIsSearching(true)
+    const queryParam = searchParams.get("q")
+    if (queryParam) {
+      console.log(`[v0] Auto-filling search with: ${queryParam}`)
+      setSearchQuery(queryParam)
+      hasSetInitialQuery.current = true
+    }
+  }, [searchParams])
 
-      const lowerQuery = query.toLowerCase()
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setMovieResults([])
+      setSeriesResults([])
+      setLiveResults([])
+      setIsSearching(false)
+      return
+    }
 
-      // Filter movies
+    if (isLoadingContent) return
+
+    setIsSearching(true)
+    const timer = setTimeout(() => {
+      const lowerQuery = searchQuery.toLowerCase()
+
       const filteredMovies = allMovies.filter((movie) => movie.name.toLowerCase().includes(lowerQuery))
-
-      // Filter series
       const filteredSeries = allSeries.filter((series) => series.name.toLowerCase().includes(lowerQuery))
-
-      // Filter live channels
       const filteredLive = allLive.filter((channel) => channel.name.toLowerCase().includes(lowerQuery))
 
-      setMovieResults(filteredMovies.slice(0, 50)) // Limit to 50 results
+      setMovieResults(filteredMovies.slice(0, 50))
       setSeriesResults(filteredSeries.slice(0, 50))
       setLiveResults(filteredLive.slice(0, 50))
       setIsSearching(false)
-    },
-    [allMovies, allSeries, allLive],
-  )
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      performSearch(searchQuery)
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchQuery, performSearch])
+  }, [searchQuery, allMovies, allSeries, allLive, isLoadingContent])
 
   const totalResults = movieResults.length + seriesResults.length + liveResults.length
   const hasSearched = searchQuery.trim().length > 0
+  const isActuallyLoading = isLoadingContent || (hasSearched && isSearching)
+  const showNoResults = hasSearched && totalResults === 0 && !isLoadingContent && !isSearching
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -115,20 +127,32 @@ export default function SearchPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-12 pr-4 h-14 text-lg bg-card/50 backdrop-blur-sm border-border/40 focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              disabled={isLoadingContent}
             />
-            {isSearching && (
-              <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin" />
-            )}
           </div>
+
+          {isLoadingContent && (
+            <div className="mt-4 flex items-center gap-3 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Loading content library...</span>
+            </div>
+          )}
+
+          {!isLoadingContent && hasSearched && isSearching && (
+            <div className="mt-4 flex items-center gap-3 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Searching...</span>
+            </div>
+          )}
         </div>
 
-        {hasSearched && (
+        {!isLoadingContent && hasSearched && !isSearching && totalResults > 0 && (
           <div className="mb-4 text-muted-foreground">
             Found {totalResults} result{totalResults !== 1 ? "s" : ""} for "{searchQuery}"
           </div>
         )}
 
-        {hasSearched && totalResults === 0 && !isSearching && (
+        {showNoResults && (
           <div className="text-center py-16">
             <Search className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-lg text-muted-foreground">No results found for "{searchQuery}"</p>
@@ -136,7 +160,15 @@ export default function SearchPage() {
           </div>
         )}
 
-        {hasSearched && totalResults > 0 && (
+        {isLoadingContent && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
+            {[...Array(24)].map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        )}
+
+        {!isLoadingContent && hasSearched && totalResults > 0 && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-6 bg-card/50 backdrop-blur-sm">
               <TabsTrigger value="all">All ({totalResults})</TabsTrigger>

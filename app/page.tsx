@@ -6,20 +6,21 @@ import Link from "next/link"
 import { MenuBar } from "@/components/menu-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ContentCarousel } from "@/components/content-carousel"
-import { MovieCard } from "@/components/movie-card"
-import { SeriesCard } from "@/components/series-card"
+import { TMDBMovieCard } from "@/components/tmdb-movie-card"
+import { TMDBSeriesCard } from "@/components/tmdb-series-card"
 import { LiveChannelCard } from "@/components/live-channel-card"
 import { useXtream } from "@/lib/xtream-context"
 import { Button } from "@/components/ui/button"
-import { Plug, Loader2, TrendingUp } from "lucide-react"
-import type { VODStream, Series } from "@/types/xtream"
+import { Plug, TrendingUp } from "lucide-react"
+import { SkeletonCarousel } from "@/components/skeleton-carousel"
+import { getTrendingMovies, getPopularSeries, type TMDBMovie, type TMDBSeries } from "@/lib/tmdb-api"
 
 export default function Page() {
   const router = useRouter()
   const { isConnected, disconnect, credentials, api, availableContent } = useXtream()
   const [loading, setLoading] = useState(false)
-  const [featuredMovies, setFeaturedMovies] = useState<VODStream[]>([])
-  const [featuredSeries, setFeaturedSeries] = useState<Series[]>([])
+  const [trendingMovies, setTrendingMovies] = useState<TMDBMovie[]>([])
+  const [popularSeries, setPopularSeries] = useState<TMDBSeries[]>([])
   const [liveChannels, setLiveChannels] = useState<any[]>([])
 
   useEffect(() => {
@@ -41,11 +42,10 @@ export default function Page() {
 
       if (availableContent.hasMovies) {
         promises.push(
-          api
-            .getVodStreams()
+          getTrendingMovies("week")
             .then((data) => data.slice(0, 20))
             .catch((err) => {
-              console.error("Error loading movies:", err)
+              console.error("[v0] Error loading trending movies from TMDB:", err)
               return []
             }),
         )
@@ -55,11 +55,10 @@ export default function Page() {
 
       if (availableContent.hasSeries) {
         promises.push(
-          api
-            .getSeries()
+          getPopularSeries()
             .then((data) => data.slice(0, 20))
             .catch((err) => {
-              console.error("Error loading series:", err)
+              console.error("[v0] Error loading popular series from TMDB:", err)
               return []
             }),
         )
@@ -73,7 +72,7 @@ export default function Page() {
             .getLiveStreams()
             .then((data) => data.slice(0, 20))
             .catch((err) => {
-              console.error("Error loading live streams:", err)
+              console.error("[v0] Error loading live streams:", err)
               return []
             }),
         )
@@ -83,22 +82,24 @@ export default function Page() {
 
       const [movies, series, live] = await Promise.all(promises)
 
-      setFeaturedMovies(movies)
-      setFeaturedSeries(series)
+      setTrendingMovies(movies)
+      setPopularSeries(series)
       setLiveChannels(live)
     } catch (err) {
-      console.error("Error loading featured content:", err)
+      console.error("[v0] Error loading featured content:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMovieClick = (movie: VODStream) => {
-    console.log("[v0] Selected movie:", movie)
+  const handleTMDBMovieClick = async (movie: TMDBMovie) => {
+    console.log("[v0] Selected TMDB movie:", movie.title, "- navigating to search")
+    router.push(`/search?q=${encodeURIComponent(movie.title)}`)
   }
 
-  const handleSeriesClick = (series: Series) => {
-    console.log("[v0] Selected series:", series)
+  const handleTMDBSeriesClick = async (series: TMDBSeries) => {
+    console.log("[v0] Selected TMDB series:", series.name, "- navigating to search")
+    router.push(`/search?q=${encodeURIComponent(series.name)}`)
   }
 
   const handleChannelClick = (channel: any) => {
@@ -135,29 +136,28 @@ export default function Page() {
         </div>
 
         {loading || availableContent.isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-muted-foreground">Loading content...</p>
-            </div>
+          <div className="space-y-8 py-8">
+            <SkeletonCarousel />
+            <SkeletonCarousel />
+            <SkeletonCarousel />
           </div>
         ) : (
           <div className="space-y-8">
-            {availableContent.hasMovies && featuredMovies.length > 0 && (
-              <ContentCarousel title="Trending Movies" itemCount={featuredMovies.length}>
-                {featuredMovies.map((movie) => (
-                  <div key={movie.stream_id} className="min-w-[160px]">
-                    <MovieCard movie={movie} onClick={() => handleMovieClick(movie)} />
+            {availableContent.hasMovies && trendingMovies.length > 0 && (
+              <ContentCarousel title="Trending Movies" itemCount={trendingMovies.length}>
+                {trendingMovies.map((movie) => (
+                  <div key={movie.id} className="min-w-[160px]">
+                    <TMDBMovieCard movie={movie} onClick={() => handleTMDBMovieClick(movie)} />
                   </div>
                 ))}
               </ContentCarousel>
             )}
 
-            {availableContent.hasSeries && featuredSeries.length > 0 && (
-              <ContentCarousel title="Popular Series" itemCount={featuredSeries.length}>
-                {featuredSeries.map((series) => (
-                  <div key={series.series_id} className="min-w-[160px]">
-                    <SeriesCard series={series} onClick={() => handleSeriesClick(series)} />
+            {availableContent.hasSeries && popularSeries.length > 0 && (
+              <ContentCarousel title="Popular Series" itemCount={popularSeries.length}>
+                {popularSeries.map((series) => (
+                  <div key={series.id} className="min-w-[160px]">
+                    <TMDBSeriesCard series={series} onClick={() => handleTMDBSeriesClick(series)} />
                   </div>
                 ))}
               </ContentCarousel>

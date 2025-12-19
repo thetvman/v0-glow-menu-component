@@ -10,10 +10,11 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { ContentCarousel } from "@/components/content-carousel"
 import { SeriesCard } from "@/components/series-card"
 import { SeriesEpisodeSelector } from "@/components/series-episode-selector"
-import { Loader2, Tv, AlertCircle } from "lucide-react"
+import { Tv, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { getOptimalItemsPerPage } from "@/lib/performance-utils"
+import { SkeletonCarousel } from "@/components/skeleton-carousel"
 
 export default function SeriesPage() {
   const router = useRouter()
@@ -145,10 +146,21 @@ export default function SeriesPage() {
         <div className="fixed top-4 right-4 z-50">
           <ThemeToggle />
         </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading series...</p>
+
+        <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+          <div className="mb-8">
+            <MenuBar />
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">Series</h1>
+            <p className="text-muted-foreground">Explore TV shows and series</p>
+          </div>
+
+          <div className="space-y-6">
+            <SkeletonCarousel />
+            <SkeletonCarousel />
+            <SkeletonCarousel />
           </div>
         </div>
       </div>
