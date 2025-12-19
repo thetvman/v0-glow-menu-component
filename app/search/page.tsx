@@ -11,6 +11,7 @@ import { Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SkeletonCard } from "@/components/skeleton-card"
+import { SeriesEpisodeSelector } from "@/components/series-episode-selector"
 import type { VodStream, Series, LiveStream } from "@/lib/xtream-api"
 
 export default function SearchPage() {
@@ -30,6 +31,9 @@ export default function SearchPage() {
   const [allLive, setAllLive] = useState<LiveStream[]>([])
 
   const [isLoadingContent, setIsLoadingContent] = useState(true)
+
+  const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null)
+  const [showEpisodeSelector, setShowEpisodeSelector] = useState(false)
 
   const hasLoadedContent = useRef(false)
   const hasSetInitialQuery = useRef(false)
@@ -108,6 +112,11 @@ export default function SearchPage() {
   const hasSearched = searchQuery.trim().length > 0
   const isActuallyLoading = isLoadingContent || (hasSearched && isSearching)
   const showNoResults = hasSearched && totalResults === 0 && !isLoadingContent && !isSearching
+
+  const handleSeriesClick = (series: Series) => {
+    setSelectedSeriesId(series.series_id)
+    setShowEpisodeSelector(true)
+  }
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -198,11 +207,7 @@ export default function SearchPage() {
                   <h2 className="text-2xl font-bold mb-4">Series</h2>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                     {seriesResults.slice(0, 16).map((series) => (
-                      <SeriesCard
-                        key={series.series_id}
-                        series={series}
-                        onClick={() => router.push(`/series/${series.series_id}`)}
-                      />
+                      <SeriesCard key={series.series_id} series={series} onClick={() => handleSeriesClick(series)} />
                     ))}
                   </div>
                 </div>
@@ -239,11 +244,7 @@ export default function SearchPage() {
             <TabsContent value="series">
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
                 {seriesResults.map((series) => (
-                  <SeriesCard
-                    key={series.series_id}
-                    series={series}
-                    onClick={() => router.push(`/series/${series.series_id}`)}
-                  />
+                  <SeriesCard key={series.series_id} series={series} onClick={() => handleSeriesClick(series)} />
                 ))}
               </div>
             </TabsContent>
@@ -262,6 +263,17 @@ export default function SearchPage() {
           </Tabs>
         )}
       </div>
+
+      {selectedSeriesId && (
+        <SeriesEpisodeSelector
+          seriesId={selectedSeriesId}
+          open={showEpisodeSelector}
+          onClose={() => {
+            setShowEpisodeSelector(false)
+            setSelectedSeriesId(null)
+          }}
+        />
+      )}
     </div>
   )
 }
