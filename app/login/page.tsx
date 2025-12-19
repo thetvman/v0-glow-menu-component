@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useXtream } from "@/lib/xtream-context"
-import { Server, User, Lock, Sparkles, Tv } from "lucide-react"
+import { User, Lock, Sparkles, Tv } from "lucide-react"
+
+const DEFAULT_SERVER_URL = "http://playlist.ideapad.cc"
 
 export default function LoginPage() {
   const router = useRouter()
   const { connect, isConnected } = useXtream()
   const [formData, setFormData] = useState({
-    baseUrl: "",
     username: "",
     password: "",
   })
@@ -34,7 +35,11 @@ export default function LoginPage() {
 
     await new Promise((resolve) => setTimeout(resolve, 800))
 
-    connect(formData)
+    connect({
+      baseUrl: DEFAULT_SERVER_URL,
+      username: formData.username,
+      password: formData.password,
+    })
     setIsSubmitting(false)
   }
 
@@ -105,7 +110,7 @@ export default function LoginPage() {
               <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-foreground via-foreground/90 to-foreground/80 bg-clip-text text-transparent">
                 Welcome Back
               </h1>
-              <p className="text-muted-foreground">Connect to your IPTV service to continue</p>
+              <p className="text-muted-foreground">Connect to amri's network</p>
             </motion.div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -113,40 +118,6 @@ export default function LoginPage() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 }}
-                className="space-y-2"
-              >
-                <Label htmlFor="baseUrl" className="text-sm font-medium flex items-center gap-2">
-                  <Server className="h-4 w-4 text-primary" />
-                  Server URL
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="baseUrl"
-                    placeholder="http://example.com:8080"
-                    value={formData.baseUrl}
-                    onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
-                    onFocus={() => setFocusedField("baseUrl")}
-                    onBlur={() => setFocusedField(null)}
-                    required
-                    className="h-12 px-4 bg-background/50 border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all duration-300"
-                  />
-                  <AnimatePresence>
-                    {focusedField === "baseUrl" && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary/10 to-accent/10 -z-10 blur-xl"
-                      />
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 }}
                 className="space-y-2"
               >
                 <Label htmlFor="username" className="text-sm font-medium flex items-center gap-2">
@@ -180,7 +151,7 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 }}
+                transition={{ delay: 0.5 }}
                 className="space-y-2"
               >
                 <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
@@ -215,7 +186,7 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
+                transition={{ delay: 0.6 }}
                 className="pt-2"
               >
                 <Button
