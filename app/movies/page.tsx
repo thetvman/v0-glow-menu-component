@@ -14,7 +14,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { getOptimalItemsPerPage } from "@/lib/performance-utils"
 
-const ITEMS_PER_PAGE = 20
+const ITEMS_PER_PAGE = 30
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+interface CachedData {
+  categories: VODCategory[]
+  moviesByCategory: Map<string, VODStream[]>
+  timestamp: number
+}
+
+let cachedMovieData: CachedData | null = null
 
 export default function MoviesPage() {
   const router = useRouter()
@@ -24,7 +33,7 @@ export default function MoviesPage() {
   const [categoryPages, setCategoryPages] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [allMovies, setAllMovies] = useState<VODStream[]>([])
+  const [categoryMovieCounts, setCategoryMovieCounts] = useState<Map<string, number>>(new Map())
 
   const adaptiveITEMS_PER_PAGE = useMemo(() => getOptimalItemsPerPage(), [])
 
@@ -49,36 +58,94 @@ export default function MoviesPage() {
       setLoading(true)
       setError(null)
 
-      const [categoriesData, moviesData] = await Promise.all([api.getVodCategories(), api.getVodStreams()])
+      const now = Date.now()
+      if (cachedMovieData && now - cachedMovieData.timestamp < CACHE_DURATION) {
+        console.log("[v0] Using cached movie data")
+        setCategories(cachedMovieData.categories)
+        setMoviesByCategory(cachedMovieData.moviesByCategory)
 
+        const pageMap = new Map<string, number>()
+        cachedMovieData.categories.forEach((cat) => pageMap.set(cat.category_id, 1))
+        setCategoryPages(pageMap)
+
+        setLoading(false)
+        return
+      }
+
+      console.log("[v0] Fetching fresh movie data")
+
+      const categoriesData = await api.getVodCategories()
       setCategories(categoriesData)
-      setAllMovies(moviesData)
 
       const movieMap = new Map<string, VODStream[]>()
       const pageMap = new Map<string, number>()
+      const countMap = new Map<string, number>()
 
-      categoriesData.forEach((category) => {
-        const categoryMovies = moviesData.filter((m) => m.category_id === category.category_id)
-        movieMap.set(category.category_id, categoryMovies.slice(0, adaptiveITEMS_PER_PAGE))
-        pageMap.set(category.category_id, 1)
+      const categoriesToPreload = categoriesData.slice(0, 3)
+
+      await Promise.all(
+        categoriesToPreload.map(async (category) => {
+          try {
+            const categoryMovies = await api.getVodStreamsByCategory(category.category_id)
+            movieMap.set(category.category_id, categoryMovies.slice(0, adaptiveITEMS_PER_PAGE))
+            pageMap.set(category.category_id, 1)
+            countMap.set(category.category_id, categoryMovies.length)
+          } catch (err) {
+            console.error(`[v0] Failed to load category ${category.category_name}:`, err)
+          }
+        }),
+      )
+
+      categoriesData.slice(3).forEach((category) => {
+        movieMap.set(category.category_id, [])
+        pageMap.set(category.category_id, 0)
+        countMap.set(category.category_id, 0)
       })
 
       setMoviesByCategory(movieMap)
       setCategoryPages(pageMap)
+      setCategoryMovieCounts(countMap)
+
+      cachedMovieData = {
+        categories: categoriesData,
+        moviesByCategory: movieMap,
+        timestamp: now,
+      }
     } catch (err) {
       setError("Failed to load movies. Please check your connection.")
-      console.error("Error loading movies:", err)
+      console.error("[v0] Error loading movies:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const loadMoreForCategory = (categoryId: string) => {
-    const currentPage = categoryPages.get(categoryId) || 1
-    const nextPage = currentPage + 1
-    const categoryMovies = allMovies.filter((m) => m.category_id === categoryId)
+  const loadMoreForCategory = async (categoryId: string) => {
+    if (!api) return
+
+    const currentPage = categoryPages.get(categoryId) || 0
     const currentMovies = moviesByCategory.get(categoryId) || []
 
+    if (currentPage === 0) {
+      try {
+        const categoryMovies = await api.getVodStreamsByCategory(categoryId)
+        const firstBatch = categoryMovies.slice(0, adaptiveITEMS_PER_PAGE)
+
+        setMoviesByCategory(new Map(moviesByCategory).set(categoryId, firstBatch))
+        setCategoryPages(new Map(categoryPages).set(categoryId, 1))
+        setCategoryMovieCounts(new Map(categoryMovieCounts).set(categoryId, categoryMovies.length))
+
+        sessionStorage.setItem(`category_${categoryId}`, JSON.stringify(categoryMovies))
+      } catch (err) {
+        console.error(`[v0] Failed to load category movies:`, err)
+      }
+      return
+    }
+
+    const storedMovies = sessionStorage.getItem(`category_${categoryId}`)
+    if (!storedMovies) return
+
+    const categoryMovies = JSON.parse(storedMovies) as VODStream[]
+    const nextPage = currentPage + 1
     const startIdx = currentPage * adaptiveITEMS_PER_PAGE
     const endIdx = nextPage * adaptiveITEMS_PER_PAGE
     const newMovies = categoryMovies.slice(startIdx, endIdx)
@@ -180,21 +247,33 @@ export default function MoviesPage() {
           <div className="space-y-6">
             {categories.map((category) => {
               const categoryMovies = moviesByCategory.get(category.category_id) || []
-              const totalCategoryMovies = allMovies.filter((m) => m.category_id === category.category_id).length
-              const hasMore = categoryMovies.length < totalCategoryMovies
+              const currentPage = categoryPages.get(category.category_id) || 0
+              const totalCategoryMovies = categoryMovieCounts.get(category.category_id) || 0
+              const hasMore = totalCategoryMovies === 0 || categoryMovies.length < totalCategoryMovies
 
-              if (totalCategoryMovies === 0) return null
+              const shouldShowCategory = currentPage > 0 || totalCategoryMovies > 0
 
               return (
                 <div key={category.category_id}>
                   <ContentCarousel title={category.category_name} itemCount={categoryMovies.length}>
-                    {categoryMovies.map((movie) => (
-                      <div key={movie.stream_id} className="flex-shrink-0 w-[150px] sm:w-[180px] md:w-[200px]">
-                        <MovieCard movie={movie} onClick={() => handleMovieClick(movie)} />
+                    {categoryMovies.length > 0 ? (
+                      categoryMovies.map((movie) => (
+                        <div key={movie.stream_id} className="flex-shrink-0 w-[150px] sm:w-[180px] md:w-[200px]">
+                          <MovieCard movie={movie} onClick={() => handleMovieClick(movie)} />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex-shrink-0 w-full text-center py-8">
+                        <button
+                          onClick={() => loadMoreForCategory(category.category_id)}
+                          className="px-6 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
+                        >
+                          Load {category.category_name}
+                        </button>
                       </div>
-                    ))}
+                    )}
                   </ContentCarousel>
-                  {hasMore && (
+                  {hasMore && categoryMovies.length > 0 && (
                     <div className="mt-4 text-center">
                       <button
                         onClick={() => loadMoreForCategory(category.category_id)}

@@ -29,6 +29,7 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
                 alt={movie.name}
                 loading="lazy"
                 decoding="async"
+                fetchpriority="low"
                 className={`w-full h-full object-cover transition-opacity duration-300 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
