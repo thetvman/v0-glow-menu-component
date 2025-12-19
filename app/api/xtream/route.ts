@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "User-Agent": "VLC/3.0.18 LibVLC/3.0.18",
+        "User-Agent": "webNetplayer v2.0",
         Accept: "*/*",
         "Accept-Encoding": "gzip, deflate",
         Connection: "keep-alive",
