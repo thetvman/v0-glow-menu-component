@@ -49,7 +49,14 @@ export default function MoviesPage() {
       setLoading(true)
       setError(null)
 
+      console.log("[v0] Fetching movie categories and streams...")
       const [categoriesData, moviesData] = await Promise.all([api.getVodCategories(), api.getVodStreams()])
+
+      console.log("[v0] Movies data loaded:", {
+        totalCategories: categoriesData.length,
+        totalMovies: moviesData.length,
+        sampleMovie: moviesData[0],
+      })
 
       setCategories(categoriesData)
       setAllMovies(moviesData)
@@ -57,6 +64,14 @@ export default function MoviesPage() {
       const initialState: Record<string, any> = {}
       categoriesData.forEach((cat) => {
         const categoryMovies = moviesData.filter((m) => m.category_id === cat.category_id)
+        console.log(`[v0] Category "${cat.category_name}": ${categoryMovies.length} movies`)
+        if (categoryMovies.length > 0) {
+          console.log(`[v0] First movie in category:`, {
+            name: categoryMovies[0].name,
+            stream_icon: categoryMovies[0].stream_icon,
+            hasIcon: !!categoryMovies[0].stream_icon,
+          })
+        }
         initialState[cat.category_id] = {
           movies: categoryMovies.slice(0, INITIAL_MOVIES_PER_CATEGORY),
           loaded: INITIAL_MOVIES_PER_CATEGORY,

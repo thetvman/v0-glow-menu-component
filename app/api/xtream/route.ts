@@ -51,6 +51,28 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+
+    if (action === "get_vod_streams") {
+      console.log("[v0] VOD Streams API Response Sample (first 3 items):")
+      console.log(JSON.stringify(data.slice(0, 3), null, 2))
+
+      // Check if any movies have stream_icon
+      const withIcons = data.filter((m: any) => m.stream_icon && m.stream_icon !== "")
+      const withoutIcons = data.filter((m: any) => !m.stream_icon || m.stream_icon === "")
+
+      console.log("[v0] VOD Icon Statistics:")
+      console.log(`  - Total movies: ${data.length}`)
+      console.log(`  - With icons: ${withIcons.length}`)
+      console.log(`  - Without icons: ${withoutIcons.length}`)
+
+      if (withIcons.length > 0) {
+        console.log("[v0] Sample movie WITH icon:", {
+          name: withIcons[0].name,
+          stream_icon: withIcons[0].stream_icon,
+        })
+      }
+    }
+
     return NextResponse.json(data)
   } catch (error) {
     console.error("[v0] Xtream API proxy error:", error)
