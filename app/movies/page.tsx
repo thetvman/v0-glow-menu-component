@@ -21,6 +21,7 @@ export default function MoviesPage() {
   const router = useRouter()
   const { api, isConnected, availableContent } = useXtream()
   const [categories, setCategories] = useState<VODCategory[]>([])
+  const [allMovies, setAllMovies] = useState<VODStream[]>([])
   const [moviesByCategory, setMoviesByCategory] = useState<
     Record<string, { movies: VODStream[]; loaded: number; hasMore: boolean; loading: boolean }>
   >({})
@@ -48,24 +49,22 @@ export default function MoviesPage() {
       setLoading(true)
       setError(null)
 
-      const categoriesData = await api.getVodCategories()
+      const [categoriesData, moviesData] = await Promise.all([api.getVodCategories(), api.getVodStreams()])
+
       setCategories(categoriesData)
+      setAllMovies(moviesData)
 
       const initialState: Record<string, any> = {}
       categoriesData.forEach((cat) => {
+        const categoryMovies = moviesData.filter((m) => m.category_id === cat.category_id)
         initialState[cat.category_id] = {
-          movies: [],
-          loaded: 0,
-          hasMore: true,
+          movies: categoryMovies.slice(0, INITIAL_MOVIES_PER_CATEGORY),
+          loaded: INITIAL_MOVIES_PER_CATEGORY,
+          hasMore: categoryMovies.length > INITIAL_MOVIES_PER_CATEGORY,
           loading: false,
         }
       })
       setMoviesByCategory(initialState)
-
-      const loadPromises = categoriesData.map((cat) =>
-        loadMoviesForCategory(cat.category_id, INITIAL_MOVIES_PER_CATEGORY),
-      )
-      await Promise.all(loadPromises)
     } catch (err) {
       setError("Failed to load movies. Please check your connection.")
       console.error("[v0] Error loading categories:", err)
@@ -75,8 +74,6 @@ export default function MoviesPage() {
   }
 
   async function loadMoviesForCategory(categoryId: string, limit: number) {
-    if (!api) return
-
     const currentState = moviesByCategory[categoryId]
     if (currentState?.loading) return
 
@@ -86,8 +83,7 @@ export default function MoviesPage() {
         [categoryId]: { ...prev[categoryId], loading: true },
       }))
 
-      // Fetch movies for this category
-      const allCategoryMovies = await api.getVodStreams(categoryId)
+      const allCategoryMovies = allMovies.filter((m) => m.category_id === categoryId)
       const currentLoaded = currentState?.loaded || 0
       const newMovies = allCategoryMovies.slice(currentLoaded, currentLoaded + limit)
       const hasMore = currentLoaded + limit < allCategoryMovies.length
@@ -112,22 +108,12 @@ export default function MoviesPage() {
 
   const handleLoadMore = async (categoryId: string) => {
     const state = moviesByCategory[categoryId]
-    console.log("[v0] handleLoadMore called for category:", categoryId, state)
 
     if (!state?.hasMore || state.loading) {
-      console.log("[v0] Skipping load more - hasMore:", state?.hasMore, "loading:", state?.loading)
       return
     }
 
-    console.log("[v0] Loading more movies for category:", categoryId)
     await loadMoviesForCategory(categoryId, LOAD_MORE_COUNT)
-  }
-
-  const handleCarouselVisible = async (categoryId: string) => {
-    const state = moviesByCategory[categoryId]
-    if (state?.movies.length === 0 && !state.loading) {
-      await loadMoviesForCategory(categoryId, INITIAL_MOVIES_PER_CATEGORY)
-    }
   }
 
   const handleMovieClick = (movie: VODStream) => {
@@ -242,7 +228,6 @@ export default function MoviesPage() {
                     hasMore={state.hasMore}
                     loading={state.loading}
                     onLoadMore={() => handleLoadMore(category.category_id)}
-                    onVisible={() => handleCarouselVisible(category.category_id)}
                     actionButton={
                       <Link href={`/movies/category/${category.category_id}`}>
                         <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
