@@ -90,7 +90,11 @@ export function VideoPlayer({
 
           hls.on(Hls.Events.ERROR, (_, data) => {
             if (data.fatal) {
-              setError("Failed to load video")
+              if (data.response?.code === 509 || data.details === "manifestLoadError") {
+                setError("This session has been terminated, please try again.")
+              } else {
+                setError("Failed to load video")
+              }
             }
           })
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
