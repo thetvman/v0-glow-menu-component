@@ -14,6 +14,12 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
 
+  const imageUrl = movie.stream_icon?.trim()
+
+  if (!imageUrl || imageUrl === "") {
+    console.log("[v0] Movie has no icon:", movie.name)
+  }
+
   return (
     <Card
       className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 border-0 bg-card"
@@ -21,11 +27,11 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
     >
       <CardContent className="p-0">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted/50 rounded-lg">
-          {movie.stream_icon && !imageError ? (
+          {imageUrl && !imageError ? (
             <>
               {!imageLoaded && <div className="absolute inset-0 bg-muted animate-pulse" />}
               <img
-                src={movie.stream_icon || "/placeholder.svg"}
+                src={imageUrl || "/placeholder.svg"}
                 alt={movie.name}
                 loading="lazy"
                 decoding="async"
@@ -33,8 +39,14 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
                 className={`w-full h-full object-cover transition-opacity duration-300 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
-                onLoad={() => setImageLoaded(true)}
-                onError={() => setImageError(true)}
+                onLoad={() => {
+                  console.log("[v0] Image loaded successfully:", movie.name)
+                  setImageLoaded(true)
+                }}
+                onError={(e) => {
+                  console.error("[v0] Image failed to load:", movie.name, imageUrl)
+                  setImageError(true)
+                }}
               />
             </>
           ) : (

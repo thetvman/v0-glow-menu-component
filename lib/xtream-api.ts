@@ -183,13 +183,25 @@ export class XtreamAPI {
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        let errorMessage = "Failed to fetch from IPTV service"
+        try {
+          const error = await response.json()
+          errorMessage = error.error || errorMessage
+          console.error("[v0] API error details:", error.details)
+        } catch (parseError) {
+          // If we can't parse the error as JSON, read as text
+          const errorText = await response.text()
+          console.error("[v0] API error (non-JSON):", errorText)
+          errorMessage = errorText || errorMessage
+        }
+
         // If we get a 511, try direct client-side request as fallback
         if (response.status === 511) {
           console.log("[v0] Server proxy blocked with 511, trying direct client request...")
           return this.directApiRequest(action, params)
         }
-        throw new Error(error.error || "Failed to fetch from IPTV service")
+
+        throw new Error(errorMessage)
       }
 
       return response.json()

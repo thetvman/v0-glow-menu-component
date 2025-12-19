@@ -62,9 +62,10 @@ export default function MoviesPage() {
       })
       setMoviesByCategory(initialState)
 
-      for (let i = 0; i < Math.min(3, categoriesData.length); i++) {
-        await loadMoviesForCategory(categoriesData[i].category_id, INITIAL_MOVIES_PER_CATEGORY)
-      }
+      const loadPromises = categoriesData.map((cat) =>
+        loadMoviesForCategory(cat.category_id, INITIAL_MOVIES_PER_CATEGORY),
+      )
+      await Promise.all(loadPromises)
     } catch (err) {
       setError("Failed to load movies. Please check your connection.")
       console.error("[v0] Error loading categories:", err)

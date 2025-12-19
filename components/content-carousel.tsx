@@ -56,6 +56,12 @@ export function ContentCarousel({
     )
 
     observer.observe(containerRef.current)
+
+    if (containerRef.current.getBoundingClientRect().top < window.innerHeight + 200) {
+      setIsVisible(true)
+      onVisible?.()
+    }
+
     return () => observer.disconnect()
   }, [isVisible, onVisible])
 

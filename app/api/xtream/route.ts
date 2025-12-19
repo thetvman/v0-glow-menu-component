@@ -38,9 +38,16 @@ export async function POST(request: NextRequest) {
       const responseText = await response.text()
       console.error("[v0] Response body:", responseText)
       return NextResponse.json(
-        { error: `API returned ${response.status}`, details: responseText },
+        { error: `API returned ${response.status}: ${response.statusText}`, details: responseText },
         { status: response.status },
       )
+    }
+
+    const contentType = response.headers.get("content-type")
+    if (!contentType || !contentType.includes("application/json")) {
+      const responseText = await response.text()
+      console.error("[v0] Non-JSON response from IPTV service:", responseText)
+      return NextResponse.json({ error: "Invalid response from IPTV service", details: responseText }, { status: 502 })
     }
 
     const data = await response.json()
