@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import type { VODStream } from "@/types/xtream"
 import { Card, CardContent } from "@/components/ui/card"
 import { Play } from "lucide-react"
-import { matchMovieWithTMDB, getPosterUrl } from "@/lib/tmdb-api"
 
 interface MovieCardProps {
   movie: VODStream
@@ -14,35 +13,12 @@ interface MovieCardProps {
 export function MovieCard({ movie, onClick }: MovieCardProps) {
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
-  const [tmdbPoster, setTmdbPoster] = useState<string | null>(null)
 
-  useEffect(() => {
-    let isMounted = true
+  const imageUrl = movie.stream_icon?.trim()
 
-    const fetchPoster = async () => {
-      try {
-        // Extract year from movie name if present (e.g., "Movie Name (2024)")
-        const yearMatch = movie.name.match(/$$(\d{4})$$/)
-        const year = yearMatch ? yearMatch[1] : undefined
-        const title = movie.name.replace(/$$\d{4}$$/, "").trim()
-
-        const tmdbMovie = await matchMovieWithTMDB(title, year)
-        if (isMounted && tmdbMovie?.poster_path) {
-          setTmdbPoster(getPosterUrl(tmdbMovie.poster_path, "w342"))
-        }
-      } catch (error) {
-        console.error("[v0] Failed to fetch TMDB poster:", movie.name, error)
-      }
-    }
-
-    fetchPoster()
-
-    return () => {
-      isMounted = false
-    }
-  }, [movie.name])
-
-  const imageUrl = tmdbPoster || movie.stream_icon?.trim()
+  if (!imageUrl || imageUrl === "") {
+    console.log("[v0] Movie has no icon:", movie.name)
+  }
 
   return (
     <Card
@@ -64,9 +40,11 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
                 onLoad={() => {
+                  console.log("[v0] Image loaded successfully:", movie.name)
                   setImageLoaded(true)
                 }}
                 onError={(e) => {
+                  console.error("[v0] Image failed to load:", movie.name, imageUrl)
                   setImageError(true)
                 }}
               />

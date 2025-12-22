@@ -2,7 +2,7 @@
 
 import type * as React from "react"
 import { motion } from "framer-motion"
-import { Home, Film, Tv, Radio, Search } from "lucide-react"
+import { Home, Film, Tv, Radio, Search, User } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -51,6 +51,13 @@ const menuItems: MenuItem[] = [
     href: "/search",
     gradient: "radial-gradient(circle, rgba(168,85,247,0.15) 0%, rgba(147,51,234,0.06) 50%, rgba(126,34,206,0) 100%)",
     iconColor: "text-purple-500",
+  },
+  {
+    icon: <User className="h-5 w-5" />,
+    label: "Account",
+    href: "/account",
+    gradient: "radial-gradient(circle, rgba(236,72,153,0.15) 0%, rgba(219,39,119,0.06) 50%, rgba(190,24,93,0) 100%)",
+    iconColor: "text-pink-500",
   },
 ]
 
@@ -102,7 +109,7 @@ export function MenuBar() {
   const isDarkTheme = theme === "dark"
 
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.href === "/" || item.href === "/search") return true
+    if (item.href === "/" || item.href === "/search" || item.href === "/account") return true
     if (item.href === "/movies") return availableContent.hasMovies
     if (item.href === "/series") return availableContent.hasSeries
     if (item.href === "/live") return availableContent.hasLiveTV

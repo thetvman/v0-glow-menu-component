@@ -23,6 +23,20 @@ export interface LiveStream {
   tv_archive_duration: number
 }
 
+export interface UserInfo {
+  username: string
+  password: string
+  message: string
+  auth: number
+  status: string
+  exp_date: string
+  is_trial: string
+  active_cons: string
+  created_at: string
+  max_connections: string
+  allowed_output_formats: string[]
+}
+
 export interface Category {
   category_id: string
   category_name: string
@@ -268,6 +282,20 @@ export class XtreamAPI {
 
   async getSeriesInfo(seriesId: number): Promise<SeriesInfo> {
     return this.apiRequest("get_series_info", { series_id: seriesId })
+  }
+
+  async getUserInfo(): Promise<UserInfo> {
+    // Player API returns user info when called with no action parameter
+    const { username, password, baseUrl } = this.credentials
+    const response = await fetch(`${baseUrl}/player_api.php?username=${username}&password=${password}`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user info: ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log("[v0] User info response:", data)
+    return data.user_info
   }
 
   // STREAM URL BUILDERS
