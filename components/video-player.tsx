@@ -62,6 +62,15 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [showControls, setShowControls] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<Array<{ time: string; message: string; type: "info" | "error" | "warn" }>>(
+    [],
+  )
+  const [showDebug, setShowDebug] = useState(false)
+
+  const addDebugLog = (message: string, type: "info" | "error" | "warn" = "info") => {
+    const timestamp = new Date().toLocaleTimeString()
+    setDebugInfo((prev) => [...prev.slice(-9), { time: timestamp, message, type }])
+  }
 
   useEffect(() => {
     const video = videoRef.current
@@ -70,13 +79,16 @@ export function VideoPlayer({
     const loadVideo = () => {
       setError("")
       setIsBuffering(true)
+      addDebugLog(`Loading video: ${src.substring(0, 50)}...`)
 
       if (src.includes(".m3u8")) {
         if (isMobile && video.canPlayType("application/vnd.apple.mpegurl")) {
           console.log("[v0] Using native HLS playback on iOS")
+          addDebugLog("Using native HLS (iOS)", "info")
           video.src = src
           setIsBuffering(false)
         } else if (Hls.isSupported()) {
+          addDebugLog("Initializing HLS.js", "info")
           const hls = new Hls({
             enableWorker: true,
             backBufferLength: 30,
@@ -90,10 +102,12 @@ export function VideoPlayer({
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             console.log("[v0] HLS manifest parsed successfully")
+            addDebugLog("✓ Manifest parsed", "info")
             setIsBuffering(false)
             if (!activeSessionId) {
               video.play().catch((err) => {
                 console.log("[v0] Autoplay blocked, user interaction required")
+                addDebugLog("Autoplay blocked", "warn")
                 setError("Click play to start")
               })
             }
@@ -101,20 +115,25 @@ export function VideoPlayer({
 
           hls.on(Hls.Events.ERROR, (_, data) => {
             console.error("[v0] HLS error:", data)
+            addDebugLog(`HLS Error: ${data.type} - ${data.details}`, "error")
             if (data.fatal) {
               if (data.response?.code === 509 || data.details === "manifestLoadError") {
                 setError("This session has been terminated, please try again.")
+                addDebugLog("Session terminated (509)", "error")
               } else {
                 setError("Failed to load video")
+                addDebugLog(`Fatal error: ${data.details}`, "error")
               }
             }
           })
         } else {
           console.error("[v0] HLS not supported on this device")
+          addDebugLog("HLS not supported", "error")
           setError("HLS playback not supported on this device")
         }
       } else {
         console.log("[v0] Loading direct video source:", src)
+        addDebugLog("Loading direct MP4", "info")
         video.src = src
         setIsBuffering(false)
       }
@@ -139,6 +158,7 @@ export function VideoPlayer({
 
     const handlePlay = () => {
       setIsPlaying(true)
+      addDebugLog("▶ Playing")
       if (!syncingFromRemoteRef.current) {
         updateSession()
       }
@@ -146,14 +166,41 @@ export function VideoPlayer({
 
     const handlePause = () => {
       setIsPlaying(false)
+      addDebugLog("⏸ Paused")
       if (!syncingFromRemoteRef.current) {
         updateSession()
       }
     }
 
-    const handleDurationChange = () => setDuration(video.duration)
-    const handleWaiting = () => setIsBuffering(true)
-    const handleCanPlay = () => setIsBuffering(false)
+    const handleDurationChange = () => {
+      setDuration(video.duration)
+      addDebugLog(`Duration: ${formatTime(video.duration)}`)
+    }
+
+    const handleWaiting = () => {
+      setIsBuffering(true)
+      addDebugLog("Buffering...", "warn")
+    }
+
+    const handleCanPlay = () => {
+      setIsBuffering(false)
+      addDebugLog("Ready to play")
+    }
+
+    const handleError = () => {
+      const error = video.error
+      if (error) {
+        const errorMessages = {
+          1: "MEDIA_ERR_ABORTED: Playback aborted",
+          2: "MEDIA_ERR_NETWORK: Network error",
+          3: "MEDIA_ERR_DECODE: Decoding error",
+          4: "MEDIA_ERR_SRC_NOT_SUPPORTED: Source not supported",
+        }
+        const msg = errorMessages[error.code as keyof typeof errorMessages] || `Unknown error (${error.code})`
+        addDebugLog(msg, "error")
+        setError(msg)
+      }
+    }
 
     video.addEventListener("timeupdate", handleTimeUpdate)
     video.addEventListener("play", handlePlay)
@@ -161,6 +208,7 @@ export function VideoPlayer({
     video.addEventListener("durationchange", handleDurationChange)
     video.addEventListener("waiting", handleWaiting)
     video.addEventListener("canplay", handleCanPlay)
+    video.addEventListener("error", handleError)
 
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate)
@@ -169,6 +217,7 @@ export function VideoPlayer({
       video.removeEventListener("durationchange", handleDurationChange)
       video.removeEventListener("waiting", handleWaiting)
       video.removeEventListener("canplay", handleCanPlay)
+      video.removeEventListener("error", handleError)
     }
   }, [activeSessionId])
 
@@ -264,6 +313,8 @@ export function VideoPlayer({
       const isMobileDevice = /iphone|ipad|ipod|android|mobile/i.test(userAgent)
       setIsMobile(isMobileDevice)
       console.log("[v0] Mobile device detected:", isMobileDevice)
+      addDebugLog(`Device: ${isMobileDevice ? "Mobile" : "Desktop"}`)
+      addDebugLog(`User Agent: ${navigator.userAgent.substring(0, 50)}...`)
     }
     checkMobile()
   }, [])
@@ -283,6 +334,68 @@ export function VideoPlayer({
         preload="metadata"
       />
 
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        className="absolute top-6 left-6 z-50 px-3 py-2 bg-black/80 text-white text-xs rounded-lg hover:bg-black/90 border border-white/20"
+      >
+        {showDebug ? "Hide" : "Show"} Debug
+      </button>
+
+      {showDebug && (
+        <div className="absolute top-20 left-6 z-50 bg-black/90 backdrop-blur-sm text-white text-xs rounded-lg p-4 max-w-md max-h-80 overflow-y-auto border border-white/20 font-mono">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/20">
+            <h3 className="font-bold text-sm">Video Debug Console</h3>
+            <button
+              onClick={() => setDebugInfo([])}
+              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-2">
+            <div className="space-y-1 pb-2 border-b border-white/10">
+              <div className="flex justify-between">
+                <span className="text-white/60">Status:</span>
+                <span className={isPlaying ? "text-green-400" : "text-yellow-400"}>
+                  {isPlaying ? "Playing" : "Paused"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Buffering:</span>
+                <span className={isBuffering ? "text-yellow-400" : "text-green-400"}>{isBuffering ? "Yes" : "No"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Time:</span>
+                <span>
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Source:</span>
+                <span className="text-xs truncate max-w-[200px]">{src.includes(".m3u8") ? "HLS" : "MP4"}</span>
+              </div>
+            </div>
+            <div className="space-y-1 pt-2">
+              {debugInfo.length === 0 ? (
+                <p className="text-white/40 text-center py-2">No logs yet</p>
+              ) : (
+                debugInfo.map((log, i) => (
+                  <div
+                    key={i}
+                    className={`text-[10px] ${
+                      log.type === "error" ? "text-red-400" : log.type === "warn" ? "text-yellow-400" : "text-white/80"
+                    }`}
+                  >
+                    <span className="text-white/40">[{log.time}]</span> {log.message}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ... existing error overlay ... */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-40">
           <div className="text-center">
