@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react"
 import Hls from "hls.js"
 import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Users, RotateCcw } from "lucide-react"
 import { WatchTogetherDialog } from "./watch-together-dialog"
-import { WatchTogetherManager, type WatchSession } from "@/lib/watch-together"
+import type { WatchTogetherManager } from "@/lib/watch-together"
 import { WatchTogetherChat } from "./watch-together-chat"
 
 interface VideoPlayerProps {
@@ -68,8 +68,15 @@ export function VideoPlayer({
     if (!video) return
 
     const loadVideo = () => {
+      setError("")
+      setIsBuffering(true)
+
       if (src.includes(".m3u8")) {
-        if (Hls.isSupported()) {
+        if (isMobile && video.canPlayType("application/vnd.apple.mpegurl")) {
+          console.log("[v0] Using native HLS playback on iOS")
+          video.src = src
+          setIsBuffering(false)
+        } else if (Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
             backBufferLength: 30,
@@ -82,13 +89,18 @@ export function VideoPlayer({
           hls.attachMedia(video)
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            console.log("[v0] HLS manifest parsed successfully")
             setIsBuffering(false)
             if (!activeSessionId) {
-              video.play().catch(() => setError("Click play to start"))
+              video.play().catch((err) => {
+                console.log("[v0] Autoplay blocked, user interaction required")
+                setError("Click play to start")
+              })
             }
           })
 
           hls.on(Hls.Events.ERROR, (_, data) => {
+            console.error("[v0] HLS error:", data)
             if (data.fatal) {
               if (data.response?.code === 509 || data.details === "manifestLoadError") {
                 setError("This session has been terminated, please try again.")
@@ -97,11 +109,12 @@ export function VideoPlayer({
               }
             }
           })
-        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          video.src = src
-          setIsBuffering(false)
+        } else {
+          console.error("[v0] HLS not supported on this device")
+          setError("HLS playback not supported on this device")
         }
       } else {
+        console.log("[v0] Loading direct video source:", src)
         video.src = src
         setIsBuffering(false)
       }
@@ -114,159 +127,7 @@ export function VideoPlayer({
         hlsRef.current.destroy()
       }
     }
-  }, [src, activeSessionId])
-
-  useEffect(() => {
-    if (!activeSessionId) return
-
-    const video = videoRef.current
-    if (!video) return
-
-    console.log("[v0] 🎬 Setting up watch session for:", activeSessionId, "isHost:", isHost)
-
-    const manager = new WatchTogetherManager()
-    managerRef.current = manager
-
-    // Get initial session state
-    manager.getSession(activeSessionId).then((session) => {
-      if (session) {
-        console.log("[v0] 📊 Initial session state:", {
-          participants: session.participants,
-          isPlaying: session.isPlaying,
-          playbackTime: session.playbackTime,
-          code: session.code,
-        })
-        setParticipants(session.participants)
-        setDisplayCode(session.code)
-
-        // Only host waits when alone
-        if (session.participants === 1 && isHost) {
-          console.log("[v0] 👤 Host waiting for guests...")
-          setWaitingForGuest(true)
-          video.pause()
-        }
-      }
-    })
-
-    let reconnectAttempts = 0
-    const maxReconnectAttempts = 5
-
-    const setupSubscription = () => {
-      // Subscribe to updates
-      manager.subscribe(
-        activeSessionId,
-        (session: WatchSession) => {
-          reconnectAttempts = 0
-          setConnectionStatus("connected")
-
-          console.log("[v0] 📡 Received sync update:", {
-            participants: session.participants,
-            playbackTime: session.playbackTime.toFixed(2),
-            isPlaying: session.isPlaying,
-            currentVideoTime: video.currentTime.toFixed(2),
-            currentlyPlaying: !video.paused,
-          })
-
-          setParticipants(session.participants)
-
-          if (session.participants > 1) {
-            console.log("[v0] 🎉 Multiple participants detected! Clearing waiting state")
-            setWaitingForGuest(false)
-          }
-
-          const timeSinceLastUpdate = Date.now() - lastUpdateTimeRef.current
-          if (timeSinceLastUpdate < 300) {
-            console.log("[v0] ⏭️ Skipping sync (just sent update", timeSinceLastUpdate, "ms ago)")
-            return
-          }
-
-          if (syncingFromRemoteRef.current) {
-            console.log("[v0] ⏭️ Skipping sync (already syncing from remote)")
-            return
-          }
-
-          syncingFromRemoteRef.current = true
-
-          if (session.isPlaying && video.paused) {
-            console.log("[v0] ▶️ Starting playback (received play command)")
-            video.play().catch((err) => {
-              console.error("[v0] Play error:", err)
-              syncingFromRemoteRef.current = false
-            })
-          } else if (!session.isPlaying && !video.paused) {
-            console.log("[v0] ⏸️ Pausing playback (received pause command)")
-            video.pause()
-          }
-
-          const timeDiff = Math.abs(video.currentTime - session.playbackTime)
-          if (timeDiff > 2.5) {
-            console.log(
-              "[v0] ⏩ Seeking to:",
-              session.playbackTime.toFixed(2),
-              "(was at:",
-              video.currentTime.toFixed(2),
-              ", diff:",
-              timeDiff.toFixed(2),
-              ")",
-            )
-            video.currentTime = session.playbackTime
-          }
-
-          setTimeout(() => {
-            syncingFromRemoteRef.current = false
-            console.log("[v0] ✅ Remote sync complete")
-          }, 500)
-        },
-        (error: string) => {
-          console.error("[v0] ❌ Subscription error:", error)
-          setConnectionStatus("disconnected")
-
-          if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-            console.log(
-              `[v0] 🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`,
-            )
-            setConnectionStatus("reconnecting")
-
-            setTimeout(() => {
-              console.log("[v0] 🔌 Reconnecting...")
-              setupSubscription()
-            }, delay)
-          } else {
-            console.error("[v0] ❌ Max reconnection attempts reached")
-            setConnectionStatus("disconnected")
-          }
-        },
-      )
-    }
-
-    setupSubscription()
-
-    return () => {
-      console.log("[v0] 🧹 Cleaning up watch session")
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current)
-      }
-      manager.unsubscribe()
-    }
-  }, [activeSessionId, isHost])
-
-  const updateSession = () => {
-    const video = videoRef.current
-    if (!video || !activeSessionId || !managerRef.current) return
-
-    if (updateTimerRef.current) {
-      clearTimeout(updateTimerRef.current)
-    }
-
-    lastUpdateTimeRef.current = Date.now()
-    console.log("[v0] 📤 Sending session update:", {
-      time: video.currentTime.toFixed(2),
-      playing: !video.paused,
-    })
-    managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
-  }
+  }, [src, activeSessionId, isMobile])
 
   useEffect(() => {
     const video = videoRef.current
@@ -310,6 +171,22 @@ export function VideoPlayer({
       video.removeEventListener("canplay", handleCanPlay)
     }
   }, [activeSessionId])
+
+  const updateSession = () => {
+    const video = videoRef.current
+    if (!video || !activeSessionId || !managerRef.current) return
+
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current)
+    }
+
+    lastUpdateTimeRef.current = Date.now()
+    console.log("[v0] 📤 Sending session update:", {
+      time: video.currentTime.toFixed(2),
+      playing: !video.paused,
+    })
+    managerRef.current?.updatePlayback(activeSessionId, video.currentTime, !video.paused)
+  }
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
@@ -401,10 +278,9 @@ export function VideoPlayer({
         ref={videoRef}
         className="w-full h-full"
         onClick={togglePlay}
-        playsInline={!isMobile}
-        controls={isMobile}
-        controlsList="nodownload"
-        x-webkit-airplay="allow"
+        playsInline
+        webkit-playsinline="true"
+        preload="metadata"
       />
 
       {error && (
