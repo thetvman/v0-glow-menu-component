@@ -116,24 +116,37 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="absolute top-4 right-4 flex items-center gap-2 z-50">
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-muted-foreground">Connected: {credentials?.username}</div>
-          <Button variant="outline" size="sm" onClick={disconnect} className="gap-2 bg-transparent">
-            <Plug className="h-4 w-4" />
-            Disconnect
-          </Button>
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="truncate">Connected: {credentials?.username}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={disconnect}
+                className="gap-2 bg-transparent flex-1 md:flex-initial"
+              >
+                <Plug className="h-4 w-4" />
+                <span className="md:inline">Disconnect</span>
+              </Button>
+              <ThemeToggle />
+            </div>
+          </div>
         </div>
-        <ThemeToggle />
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-12 flex flex-col items-center justify-center min-h-[40vh]">
+        <div className="mb-12 flex flex-col items-center justify-center min-h-[30vh] md:min-h-[40vh]">
           <div className="mb-8 text-center">
-            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
               amri's network
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">amri's movie & series library</p>
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+              amri's movie & series library
+            </p>
           </div>
 
           <MenuBar />
