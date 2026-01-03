@@ -40,6 +40,7 @@ export function VideoPlayer({
   const syncingFromRemoteRef = useRef(false)
   const lastUpdateTimeRef = useRef(0)
   const updateTimerRef = useRef<NodeJS.Timeout>()
+  const [isMobile, setIsMobile] = useState(false)
   const [deviceId] = useState(() => {
     if (typeof window === "undefined") return ""
     let id = localStorage.getItem("device-id")
@@ -49,19 +50,18 @@ export function VideoPlayer({
     }
     return id
   })
-
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(false)
+  const [error, setError] = useState("")
+  const [participants, setParticipants] = useState(0)
+  const [displayCode, setDisplayCode] = useState("")
+  const [waitingForGuest, setWaitingForGuest] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState("connected")
   const [currentTime, setCurrentTime] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
-  const [showControls, setShowControls] = useState(true)
-  const [isBuffering, setIsBuffering] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [participants, setParticipants] = useState(1)
-  const [waitingForGuest, setWaitingForGuest] = useState(false)
-  const [displayCode, setDisplayCode] = useState(sessionCode || "")
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "reconnecting">("connected")
+  const [showControls, setShowControls] = useState(false)
 
   useEffect(() => {
     const video = videoRef.current
@@ -381,13 +381,31 @@ export function VideoPlayer({
     }
   }
 
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent.toLowerCase()
+      const isMobileDevice = /iphone|ipad|ipod|android|mobile/i.test(userAgent)
+      setIsMobile(isMobileDevice)
+      console.log("[v0] Mobile device detected:", isMobileDevice)
+    }
+    checkMobile()
+  }, [])
+
   return (
     <div
       className="relative w-full h-full bg-black"
       onMouseMove={() => setShowControls(true)}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
-      <video ref={videoRef} className="w-full h-full" onClick={togglePlay} />
+      <video
+        ref={videoRef}
+        className="w-full h-full"
+        onClick={togglePlay}
+        playsInline={!isMobile}
+        controls={isMobile}
+        controlsList="nodownload"
+        x-webkit-airplay="allow"
+      />
 
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-40">
